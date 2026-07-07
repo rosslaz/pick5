@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-pitch text-ink font-body antialiased;
+  background-image: radial-gradient(1100px 500px at 50% -200px, rgba(255, 176, 32, 0.07), transparent 70%);
+}
+
+h1, h2, h3 {
+  @apply font-display uppercase tracking-wide;
+}
+
+.card {
+  @apply bg-surface border border-line rounded-xl;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-display uppercase tracking-wider text-base font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+}
+.btn-amber { @apply btn bg-amber text-pitch hover:bg-[#ffc14d]; }
+.btn-ghost { @apply btn border border-line text-ink hover:border-amber/50 hover:text-amber; }
+.btn-danger { @apply btn border border-loss/40 text-loss hover:bg-loss/10; }
+
+.input {
+  @apply w-full rounded-lg bg-pitch border border-line px-3 py-2 text-ink placeholder:text-muted/60 focus:outline-none focus:border-amber/60;
+}
+
+/* stadium scoreboard cells */
+.score-cell {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-variant-numeric: tabular-nums;
+  @apply inline-flex min-w-[2.6rem] items-center justify-center rounded-md px-1.5 py-0.5 text-lg font-bold;
+  background: #0a101c;
+  border: 1px solid rgba(255, 176, 32, 0.22);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.65);
+  color: #ffb020;
+  text-shadow: 0 0 8px rgba(255, 176, 32, 0.45);
+}
+.score-cell.dim { color: #55617a; text-shadow: none; border-color: rgba(148, 170, 205, 0.15); }
+.score-cell.live { color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.5); border-color: rgba(74, 222, 128, 0.3); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .pulse-live { animation: pulse-live 1.6s ease-in-out infinite; }
+  @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+}
