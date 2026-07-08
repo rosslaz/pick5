@@ -129,8 +129,8 @@ export function PicksForm({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <div className="flex flex-col gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="flex min-w-0 flex-col gap-3">
         {games.map((game) => {
           const locked = isLocked(game.id);
           const mySlot = slotOf(game.id);
@@ -179,7 +179,7 @@ export function PicksForm({
         })}
       </div>
 
-      <aside className="lg:sticky lg:top-24 lg:self-start">
+      <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
         <div className="card p-4">
           <div className="flex items-baseline justify-between">
             <h2 className="text-2xl">Your picks</h2>
@@ -290,21 +290,24 @@ function TeamButton({
       onClick={onClick}
       disabled={locked}
       aria-pressed={selected}
-      className={`relative flex min-w-0 items-center gap-2 rounded-lg border px-2 py-2 text-left transition-colors disabled:cursor-not-allowed ${
+      className={`relative block w-full min-w-0 rounded-lg border px-2 py-2 text-left transition-colors disabled:cursor-not-allowed ${
         selected
           ? "border-amber bg-amber/10"
           : "border-line hover:border-amber/40"
       }`}
     >
-      {logo && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" className="h-8 w-8 shrink-0" loading="lazy" />
-      )}
-      <span className="min-w-0 flex-1">
-        <span className="block font-display text-xl font-bold leading-tight">{abbr}</span>
-        <span className="block truncate text-xs text-muted">{name}</span>
+      {/* Flex lives on an inner span: Safari mis-sizes flex children of <button>. */}
+      <span className="flex min-w-0 items-center gap-2">
+        {logo && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logo} alt="" className="h-8 w-8 shrink-0" loading="lazy" />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-xl font-bold leading-tight">{abbr}</span>
+          <span className="block truncate text-xs text-muted">{name}</span>
+        </span>
+        {score !== null && <span className="score-cell">{score}</span>}
       </span>
-      {score !== null && <span className="score-cell">{score}</span>}
       {slotNumber && (
         <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-amber font-display text-sm font-bold text-white">
           {slotNumber}
