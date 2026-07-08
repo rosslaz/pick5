@@ -344,7 +344,7 @@ function ScoreRow({
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg border border-line bg-pitch px-3 py-2">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-line bg-pitch px-3 py-2">
       <div className="min-w-0">
         <div className="truncate font-display text-lg">
           {game.away_abbr} @ {game.home_abbr}
@@ -359,7 +359,7 @@ function ScoreRow({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
         <label className="sr-only" htmlFor={`away-${game.id}`}>
           {game.away_abbr} score
         </label>

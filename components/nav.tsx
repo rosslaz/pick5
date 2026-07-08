@@ -33,13 +33,13 @@ export function Nav({
   return (
     <header className="sticky top-0 z-20 -mx-3 mb-6 border-b border-line bg-pitch/95 px-3 pb-0 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-baseline gap-3">
-          <span className="font-display text-2xl font-bold uppercase tracking-wider text-amber">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <span className="whitespace-nowrap font-display text-2xl font-bold uppercase tracking-wider text-amber">
             Pick 5
           </span>
           {leagues.length > 1 ? (
             <select
-              className="input w-auto py-1 text-sm"
+              className="input min-w-0 max-w-[10rem] py-1 text-sm sm:max-w-none"
               value={league.id}
               onChange={(e) => router.push(`/league/${e.target.value}/picks`)}
               aria-label="Switch league"
@@ -51,7 +51,7 @@ export function Nav({
               ))}
             </select>
           ) : (
-            <span className="text-sm text-muted">{league.name}</span>
+            <span className="truncate text-sm text-muted">{league.name}</span>
           )}
         </div>
         <div className="flex items-center gap-3">

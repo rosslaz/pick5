@@ -151,7 +151,7 @@ export function PicksForm({
                   {game.status === "scheduled" && !locked && "\u00A0"}
                 </span>
               </div>
-              <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2">
                 <TeamButton
                   name={game.away_team}
                   abbr={game.away_abbr}
@@ -290,7 +290,7 @@ function TeamButton({
       onClick={onClick}
       disabled={locked}
       aria-pressed={selected}
-      className={`relative flex items-center gap-2 rounded-lg border px-2 py-2 text-left transition-colors disabled:cursor-not-allowed ${
+      className={`relative flex min-w-0 items-center gap-2 rounded-lg border px-2 py-2 text-left transition-colors disabled:cursor-not-allowed ${
         selected
           ? "border-amber bg-amber/10"
           : "border-line hover:border-amber/40"
