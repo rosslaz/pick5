@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { compareKeys, type Slot, type WeeklyRow } from "@/lib/scoring";
+import { downloadCsv, slugify } from "@/lib/csv";
 
 export type BoardRow = WeeklyRow & {
   overallTotal: number;
@@ -16,9 +17,15 @@ type SortCol = "name" | "week" | "overall";
 export function LeaderboardTable({
   rows,
   viewerId,
+  isAdmin,
+  week,
+  leagueName,
 }: {
   rows: BoardRow[];
   viewerId: string;
+  isAdmin: boolean;
+  week: number;
+  leagueName: string;
 }) {
   const [col, setCol] = useState<SortCol>("week");
   const [asc, setAsc] = useState(false);
@@ -52,8 +59,57 @@ export function LeaderboardTable({
     return arr;
   }, [rows, col, asc, viewerId]);
 
+  function exportWeekCsv() {
+    // Canonical weekly-rank order regardless of the on-screen sort. Slots
+    // export exactly what the viewer can see: hidden picks stay "hidden".
+    const ordered = [...rows].sort(
+      (a, b) => compareKeys(a.key, b.key) || a.name.localeCompare(b.name)
+    );
+    downloadCsv(`${slugify(leagueName)}-week-${week}-leaderboard.csv`, [
+      [
+        "Week",
+        "Rank",
+        "Player",
+        "Record",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "Week Total",
+        "Overall Rank",
+        "Overall Total",
+        "Weeks Won",
+      ],
+      ...ordered.map((r) => [
+        week,
+        r.rank,
+        r.name,
+        `${r.wins}-${r.losses}`,
+        ...r.slots.map(slotText),
+        r.total,
+        r.overallRank,
+        r.overallTotal,
+        r.weeksWon,
+      ]),
+    ]);
+  }
+
   return (
-    <div className="card overflow-x-auto">
+    <div>
+      {isAdmin && (
+        <div className="mb-2 flex justify-end">
+          <button
+            className="btn-ghost px-3 py-1 text-sm"
+            type="button"
+            onClick={exportWeekCsv}
+            title="Download this week's standings and picks as a CSV file"
+          >
+            Export week {week} CSV
+          </button>
+        </div>
+      )}
+      <div className="card overflow-x-auto">
       <table className="w-full border-collapse text-left">
         <thead>
           <tr className="border-b border-line text-xs uppercase text-muted">
@@ -136,8 +192,21 @@ export function LeaderboardTable({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
+}
+
+/** Plain-text slot for CSV export — mirrors what the viewer sees on screen. */
+function slotText(slot: Slot): string {
+  if (slot.kind === "empty") return "--";
+  if (slot.kind === "hidden") return "hidden";
+  const abbr = slot.pick.picked_home ? slot.game.home_abbr : slot.game.away_abbr;
+  const r = slot.result;
+  if (r.state === "win") return `${abbr} (${r.points})`;
+  if (r.state === "loss") return `${abbr} (0)`;
+  if (r.state === "live") return `${abbr} (live)`;
+  return abbr; // scheduled, not yet kicked off
 }
 
 function SortHeader({

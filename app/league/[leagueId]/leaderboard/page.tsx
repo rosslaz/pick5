@@ -122,6 +122,10 @@ export default async function LeaderboardPage({
         : i + 1;
   });
 
+  const isAdmin = memberList.some(
+    (m) => m.user_id === user.id && m.role === "admin" && m.status === "active"
+  );
+
   return (
     <main>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -137,7 +141,13 @@ export default async function LeaderboardPage({
         selected={week}
         current={currentWeek}
       />
-      <LeaderboardTable rows={rows} viewerId={user.id} />
+      <LeaderboardTable
+        rows={rows}
+        viewerId={user.id}
+        isAdmin={isAdmin}
+        week={week}
+        leagueName={league.name}
+      />
       <p className="mt-2 text-xs text-muted">
         You&apos;re always pinned to the top row with your true rank · # = weekly rank
         (overall rank when sorted by Overall) · W-L next to each name = season pick record;

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { invokeSync } from "@/lib/sync";
+import { downloadCsv, slugify } from "@/lib/csv";
 import { KickoffTime } from "@/components/kickoff-time";
 import { WeekPicker } from "@/components/week-picker";
 import type { Game, League, MemberRow } from "@/lib/types";
@@ -64,7 +65,7 @@ export function AdminClient({
   }
 
   function exportPlayersCsv() {
-    const rows = [
+    downloadCsv(`${slugify(league.name)}-players.csv`, [
       ["Name", "Email", "Role", "Status", "Joined"],
       ...members.map((m) => [
         m.profiles?.display_name ?? "",
@@ -73,24 +74,7 @@ export function AdminClient({
         m.status,
         new Date(m.joined_at).toLocaleDateString("en-US"),
       ]),
-    ];
-    // Quote every field and escape embedded quotes so names with commas survive.
-    const csv = rows
-      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-      .join("\r\n");
-    // BOM so spreadsheet apps detect UTF-8.
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const slug =
-      league.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
-      "league";
-    a.download = `${slug}-players.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    ]);
   }
 
   async function sync(body: { season: number; week?: number; full?: boolean }) {
