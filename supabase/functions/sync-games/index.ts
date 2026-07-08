@@ -34,9 +34,13 @@ Deno.serve(async (req) => {
 
     const rows: GameRow[] = [];
     for (const week of weeks) {
+      // NOTE: the season selector on this endpoint is `dates=YYYY` — a `year=`
+      // parameter is silently ignored and ESPN falls back to its default
+      // (often the *previous* season), which is how we once loaded 2025 games
+      // labeled as 2026. mapEvent double-checks each event's own season stamp.
       const url =
         `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard` +
-        `?year=${season}&seasontype=${SEASON_TYPE_REGULAR}&week=${week}`;
+        `?dates=${season}&seasontype=${SEASON_TYPE_REGULAR}&week=${week}`;
       const res = await fetch(url);
       if (!res.ok) continue;
       const data = await res.json();
@@ -97,6 +101,13 @@ interface GameRow {
 
 // deno-lint-ignore no-explicit-any
 function mapEvent(event: any, season: number, week: number): GameRow | null {
+  // Trust the event's own stamps over our request parameters: if ESPN handed
+  // back a different season (or non-regular-season) game, refuse it.
+  if (event?.season?.year != null && Number(event.season.year) !== season) return null;
+  if (event?.season?.type != null && Number(event.season.type) !== SEASON_TYPE_REGULAR) {
+    return null;
+  }
+
   const comp = event?.competitions?.[0];
   if (!comp) return null;
   const competitors = comp.competitors ?? [];
@@ -115,7 +126,7 @@ function mapEvent(event: any, season: number, week: number): GameRow | null {
   return {
     espn_id: String(event.id),
     season,
-    week,
+    week: Number(event?.week?.number ?? week),
     kickoff: comp.date ?? event.date,
     home_team: home.team?.displayName ?? home.team?.name ?? "Home",
     away_team: away.team?.displayName ?? away.team?.name ?? "Away",
