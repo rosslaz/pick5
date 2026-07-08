@@ -200,7 +200,7 @@ export function PicksForm({
                   <span className="score-cell dim">{i + 1}</span>
                   {s && game ? (
                     <>
-                      <span className="flex-1 truncate font-display text-lg font-semibold">
+                      <span className="min-w-0 flex-1 truncate font-display text-lg font-semibold">
                         {s.pickedHome ? game.home_abbr : game.away_abbr}
                         <span className="ml-2 text-sm font-normal text-muted">
                           vs {s.pickedHome ? game.away_abbr : game.home_abbr}

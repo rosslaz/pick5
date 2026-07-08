@@ -4,11 +4,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Pick 5",
   description: "Pick five NFL winners a week. Score what your teams score.",
+  appleWebApp: { capable: true, title: "Pick 5", statusBarStyle: "black" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#030D1C",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
