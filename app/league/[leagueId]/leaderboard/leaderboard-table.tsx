@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { compareKeys, type Slot, type WeeklyRow } from "@/lib/scoring";
 
-export type BoardRow = WeeklyRow & { overallTotal: number; weeksWon: number };
+export type BoardRow = WeeklyRow & {
+  overallTotal: number;
+  weeksWon: number;
+  wins: number;
+  losses: number;
+  overallRank: number;
+};
 
 type SortCol = "name" | "week" | "overall";
 
@@ -37,8 +43,14 @@ export function LeaderboardTable({
     };
     arr.sort(cmp[col]);
     if (asc !== (col === "name")) arr.reverse();
+    // The signed-in player is always pinned to the top, keeping their true rank.
+    const me = arr.findIndex((r) => r.userId === viewerId);
+    if (me > 0) {
+      const [row] = arr.splice(me, 1);
+      arr.unshift(row);
+    }
     return arr;
-  }, [rows, col, asc]);
+  }, [rows, col, asc, viewerId]);
 
   return (
     <div className="card overflow-x-auto">
@@ -81,9 +93,20 @@ export function LeaderboardTable({
                 row.userId === viewerId ? "bg-amber/5" : ""
               }`}
             >
-              <td className="px-3 py-2 font-display text-lg text-muted">{row.rank}</td>
+              <td
+                className="px-3 py-2 font-display text-lg text-muted"
+                title={col === "overall" ? "Overall rank" : "Weekly rank"}
+              >
+                {col === "overall" ? row.overallRank : row.rank}
+              </td>
               <td className="px-3 py-2 font-semibold">
                 {row.name}
+                <span
+                  className="ml-2 font-body text-xs font-normal text-muted"
+                  title="Season pick record (a tied game counts as a loss)"
+                >
+                  {row.wins}-{row.losses}
+                </span>
                 {row.userId === viewerId && <span className="ml-1 text-xs text-amber">you</span>}
               </td>
               {row.slots.map((slot, i) => (
@@ -177,18 +200,14 @@ function SlotCell({ slot }: { slot: Slot }) {
         {result.points}
       </span>
     );
-  if (result.state === "loss")
+  if (result.state === "loss") {
+    const tied = game.home_score != null && game.home_score === game.away_score;
     return (
-      <span className="score-cell dim" title={`${abbr} lost`}>
+      <span className="score-cell dim" title={tied ? "Tie — counts as a loss" : `${abbr} lost`}>
         0
       </span>
     );
-  if (result.state === "tie")
-    return (
-      <span className="score-cell dim" title="Tie — no points">
-        0
-      </span>
-    );
+  }
   if (result.state === "live")
     return (
       <span className="score-cell live pulse-live" title={`${abbr} — in progress`}>

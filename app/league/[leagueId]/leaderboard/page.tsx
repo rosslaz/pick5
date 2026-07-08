@@ -81,19 +81,46 @@ export default async function LeaderboardPage({
     p_league_id: league.id,
     p_season: league.season,
   });
-  const overallMap = new Map<string, { total: number; weeks_won: number }>(
-    ((overall as { user_id: string; total: number; weeks_won: number }[] | null) ?? []).map(
-      (o) => [o.user_id, { total: o.total, weeks_won: o.weeks_won }]
-    )
+  const overallMap = new Map<
+    string,
+    { total: number; weeks_won: number; wins: number; losses: number }
+  >(
+    (
+      (overall as
+        | { user_id: string; total: number; weeks_won: number; wins: number; losses: number }[]
+        | null) ?? []
+    ).map((o) => [
+      o.user_id,
+      { total: o.total, weeks_won: o.weeks_won, wins: o.wins, losses: o.losses },
+    ])
   );
 
   const memberList = members ?? [];
   const weekly = buildWeeklyBoard(memberList, weekPicks ?? [], user.id, submittedSlots);
-  const rows: BoardRow[] = weekly.map((r) => ({
-    ...r,
-    overallTotal: overallMap.get(r.userId)?.total ?? 0,
-    weeksWon: overallMap.get(r.userId)?.weeks_won ?? 0,
-  }));
+  const rows: BoardRow[] = weekly.map((r) => {
+    const o = overallMap.get(r.userId);
+    return {
+      ...r,
+      overallTotal: o?.total ?? 0,
+      weeksWon: o?.weeks_won ?? 0,
+      wins: o?.wins ?? 0,
+      losses: o?.losses ?? 0,
+      overallRank: 0,
+    };
+  });
+
+  // Overall ranks (ties share a rank), independent of the display sort.
+  const byOverall = [...rows].sort(
+    (a, b) =>
+      b.overallTotal - a.overallTotal || b.weeksWon - a.weeksWon || a.name.localeCompare(b.name)
+  );
+  byOverall.forEach((r, i) => {
+    const prev = byOverall[i - 1];
+    r.overallRank =
+      i > 0 && prev.overallTotal === r.overallTotal && prev.weeksWon === r.weeksWon
+        ? prev.overallRank
+        : i + 1;
+  });
 
   return (
     <main>
@@ -112,10 +139,11 @@ export default async function LeaderboardPage({
       />
       <LeaderboardTable rows={rows} viewerId={user.id} />
       <p className="mt-2 text-xs text-muted">
-        # = weekly rank · 🔒 pick submitted, hidden until the Sunday 1:00 slate (later games
-        reveal at their own kickoff) · -- no pick submitted · Week ties break by Pick 1
-        points, then Pick 2, and so on · Overall ties break by weeks won (hover an Overall
-        total to see them).
+        You&apos;re always pinned to the top row with your true rank · # = weekly rank
+        (overall rank when sorted by Overall) · W-L next to each name = season pick record;
+        a tied game counts as a loss · 🔒 pick submitted, hidden until the Sunday 1:00 slate
+        (later games reveal at their own kickoff) · -- no pick submitted · Week ties break
+        by Pick 1 points, then Pick 2, and so on · Overall ties break by weeks won.
       </p>
     </main>
   );

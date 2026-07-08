@@ -1,21 +1,23 @@
 import { Game, MemberRow, PickRow } from "@/lib/types";
 import { PICKS_PER_WEEK } from "@/lib/config";
 
-export type PickState = "pending" | "live" | "win" | "loss" | "tie";
+export type PickState = "pending" | "live" | "win" | "loss";
 
 export interface PickResult {
   state: PickState;
   points: number;
 }
 
-/** Correct pick = the points the picked team scored. Wrong pick (or NFL tie) = 0. */
+/**
+ * Correct pick = the points the picked team scored. Anything else = 0,
+ * including an NFL tie — you didn't pick a winner, so it counts as a loss.
+ */
 export function pickResult(pick: PickRow, game: Game): PickResult {
   if (game.status !== "final" || game.home_score == null || game.away_score == null) {
     return { state: game.status === "in_progress" ? "live" : "pending", points: 0 };
   }
-  if (game.home_score === game.away_score) return { state: "tie", points: 0 };
   const homeWon = game.home_score > game.away_score;
-  if (pick.picked_home === homeWon) {
+  if (game.home_score !== game.away_score && pick.picked_home === homeWon) {
     return { state: "win", points: pick.picked_home ? game.home_score : game.away_score };
   }
   return { state: "loss", points: 0 };
