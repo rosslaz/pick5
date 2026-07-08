@@ -72,6 +72,25 @@ export async function setScore(
   return {};
 }
 
+export async function renameLeague(
+  leagueId: string,
+  name: string
+): Promise<{ error?: string }> {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return { error: "League name can't be empty." };
+  if (trimmed.length > 60) return { error: "League name must be 60 characters or fewer." };
+  const supabase = await client();
+  // RLS (leagues_update policy, migration 0002) restricts this to league admins.
+  const { error } = await supabase
+    .from("leagues")
+    .update({ name: trimmed })
+    .eq("id", leagueId);
+  if (error) return { error: error.message };
+  // The name appears in the nav on every page, so refresh the whole layout.
+  revalidatePath(`/league/${leagueId}`, "layout");
+  return {};
+}
+
 export async function releaseOverride(
   leagueId: string,
   gameId: string

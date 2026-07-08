@@ -5,15 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        pitch: "#0B1220",
-        surface: "#131C2E",
-        raised: "#1B2740",
-        line: "rgba(148,170,205,0.14)",
-        amber: "#FFB020",
+        // NFL palette: shield-navy field, red accent, silver-white ink.
+        // NOTE: the accent token is still named "amber" from the original
+        // scoreboard theme so class names didn't need renaming across every
+        // component — its value is now NFL red (#D50A0A).
+        pitch: "#030D1C",
+        surface: "#07203B",
+        raised: "#0D3059",
+        line: "rgba(126,167,216,0.16)",
+        amber: "#D50A0A",
         win: "#4ADE80",
         loss: "#F87171",
-        ink: "#E9EFF9",
-        muted: "#8C99AF"
+        ink: "#EAF1FA",
+        muted: "#8FA6C1"
       },
       fontFamily: {
         display: ['"Barlow Condensed"', '"Arial Narrow"', "sans-serif"],

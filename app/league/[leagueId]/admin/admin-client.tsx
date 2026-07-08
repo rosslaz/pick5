@@ -10,6 +10,7 @@ import type { Game, League, MemberRow } from "@/lib/types";
 import {
   regenerateInviteCode,
   releaseOverride,
+  renameLeague,
   setMemberRole,
   setMemberStatus,
   setScore,
@@ -34,6 +35,7 @@ export function AdminClient({
 }) {
   const router = useRouter();
   const [code, setCode] = useState(league.invite_code);
+  const [name, setName] = useState(league.name);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -102,6 +104,31 @@ export function AdminClient({
     <main className="flex flex-col gap-8">
       <h1 className="text-3xl">Admin — {league.name}</h1>
       {err && <p className="rounded-lg border border-loss/40 bg-loss/10 px-3 py-2 text-loss">{err}</p>}
+
+      {/* League name */}
+      <section className="card p-5">
+        <h2 className="text-2xl">League name</h2>
+        <p className="mt-1 text-sm text-muted">
+          Shown in the nav and on every screen for all players.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <input
+            className="input max-w-xs"
+            maxLength={60}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="League name"
+          />
+          <button
+            className="btn-ghost"
+            disabled={pending || name.trim() === league.name || name.trim() === ""}
+            type="button"
+            onClick={() => run(() => renameLeague(league.id, name))}
+          >
+            Save name
+          </button>
+        </div>
+      </section>
 
       {/* Invite code */}
       <section className="card p-5">

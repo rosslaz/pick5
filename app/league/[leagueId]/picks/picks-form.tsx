@@ -306,7 +306,7 @@ function TeamButton({
       </span>
       {score !== null && <span className="score-cell">{score}</span>}
       {slotNumber && (
-        <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-amber font-display text-sm font-bold text-pitch">
+        <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-amber font-display text-sm font-bold text-white">
           {slotNumber}
         </span>
       )}
