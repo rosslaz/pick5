@@ -23,8 +23,8 @@ export function pickResult(pick: PickRow, game: Game): PickResult {
 
 export type Slot =
   | { kind: "pick"; pick: PickRow; game: Game; result: PickResult }
-  | { kind: "unknown" } // another player's slot: hidden until kickoff, or no pick made
-  | { kind: "empty" }; // viewer's own slot with no pick
+  | { kind: "hidden" } // pick submitted; details hidden until that game kicks off
+  | { kind: "empty" }; // no pick submitted for this slot
 
 export interface WeeklyRow {
   userId: string;
@@ -44,11 +44,17 @@ function compareKeys(a: number[], b: number[]): number {
   return 0;
 }
 
-/** Build one week's leaderboard. `picks` must already be filtered to that week. */
+/**
+ * Build one week's leaderboard. `picks` must already be filtered to that week.
+ * `submittedSlots` holds a "userId:pickOrder" key for every saved pick in the
+ * week (visible or not, via the get_pick_slots RPC) so a slot with an
+ * unrevealed pick renders as hidden rather than empty.
+ */
 export function buildWeeklyBoard(
   members: MemberRow[],
   picks: PickRow[],
-  viewerId: string
+  viewerId: string,
+  submittedSlots?: Set<string>
 ): WeeklyRow[] {
   const rows: WeeklyRow[] = members
     .filter((m) => m.status === "active")
@@ -64,8 +70,11 @@ export function buildWeeklyBoard(
           slots.push({ kind: "pick", pick, game: pick.games, result });
           slotPoints.push(result.points);
           total += result.points;
+        } else if (submittedSlots?.has(`${m.user_id}:${order}`)) {
+          slots.push({ kind: "hidden" });
+          slotPoints.push(0);
         } else {
-          slots.push(m.user_id === viewerId ? { kind: "empty" } : { kind: "unknown" });
+          slots.push({ kind: "empty" });
           slotPoints.push(0);
         }
       }

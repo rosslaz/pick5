@@ -62,7 +62,21 @@ export default async function LeaderboardPage({
   const picks = allPicks ?? [];
   const memberList = members ?? [];
   const weeklyPicks = picks.filter((p) => p.week === week);
-  const weekly = buildWeeklyBoard(memberList, weeklyPicks, user.id);
+
+  // Which slots have a saved pick this week (no pick details), so submitted-
+  // but-hidden renders differently from not-submitted.
+  const { data: slotRows } = await supabase.rpc("get_pick_slots", {
+    p_league_id: league.id,
+    p_season: league.season,
+    p_week: week,
+  });
+  const submittedSlots = new Set<string>(
+    ((slotRows as { user_id: string; pick_order: number }[] | null) ?? []).map(
+      (s) => `${s.user_id}:${s.pick_order}`
+    )
+  );
+
+  const weekly = buildWeeklyBoard(memberList, weeklyPicks, user.id, submittedSlots);
 
   const { data: allGamesMeta } = await supabase
     .from("games")
@@ -137,7 +151,8 @@ export default async function LeaderboardPage({
           </table>
         </div>
         <p className="mt-2 text-xs text-muted">
-          Tiebreaker: highest Pick 1 points, then Pick 2, and so on.
+          🔒 pick submitted, hidden until kickoff · -- no pick submitted · Tiebreaker:
+          highest Pick 1 points, then Pick 2, and so on.
         </p>
       </section>
 
@@ -193,8 +208,18 @@ export default async function LeaderboardPage({
 }
 
 function SlotCell({ slot }: { slot: Slot }) {
-  if (slot.kind === "empty") return <span className="score-cell dim">–</span>;
-  if (slot.kind === "unknown") return <span className="score-cell dim">🔒</span>;
+  if (slot.kind === "empty")
+    return (
+      <span className="score-cell dim" title="No pick submitted">
+        --
+      </span>
+    );
+  if (slot.kind === "hidden")
+    return (
+      <span className="score-cell dim" title="Pick submitted — hidden until kickoff">
+        🔒
+      </span>
+    );
 
   const { result, pick, game } = slot;
   const abbr = pick.picked_home ? game.home_abbr : game.away_abbr;
