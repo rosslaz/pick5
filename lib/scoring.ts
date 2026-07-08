@@ -36,7 +36,8 @@ export interface WeeklyRow {
   rank: number;
 }
 
-function compareKeys(a: number[], b: number[]): number {
+/** Compare tiebreak keys: higher total first, then Pick 1 points, Pick 2… */
+export function compareKeys(a: number[], b: number[]): number {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     const diff = (b[i] ?? 0) - (a[i] ?? 0);
     if (diff !== 0) return diff;
@@ -91,69 +92,6 @@ export function buildWeeklyBoard(
   rows.sort((a, b) => compareKeys(a.key, b.key) || a.name.localeCompare(b.name));
   rows.forEach((row, i) => {
     row.rank = i > 0 && compareKeys(row.key, rows[i - 1].key) === 0 ? rows[i - 1].rank : i + 1;
-  });
-  return rows;
-}
-
-export interface OverallRow {
-  userId: string;
-  name: string;
-  total: number;
-  weeksWon: number;
-  rank: number;
-}
-
-/**
- * Season standings: sum of weekly points. Ties broken by number of weekly wins
- * (a week counts as won once every game that week is final).
- */
-export function buildOverallBoard(
-  members: MemberRow[],
-  picks: PickRow[],
-  allGames: Pick<Game, "week" | "status">[],
-  viewerId: string
-): OverallRow[] {
-  const weeks = Array.from(new Set(picks.map((p) => p.week))).sort((a, b) => a - b);
-  const totals = new Map<string, number>();
-  const wins = new Map<string, number>();
-
-  for (const week of weeks) {
-    const weekRows = buildWeeklyBoard(
-      members,
-      picks.filter((p) => p.week === week),
-      viewerId
-    );
-    for (const row of weekRows) {
-      totals.set(row.userId, (totals.get(row.userId) ?? 0) + row.total);
-    }
-    const weekGames = allGames.filter((g) => g.week === week);
-    const weekDone = weekGames.length > 0 && weekGames.every((g) => g.status === "final");
-    // A week only produces a winner once every game is final AND someone
-    // actually scored — otherwise an empty week hands everyone a "win".
-    if (weekDone && weekRows.length > 0 && weekRows[0].total > 0) {
-      for (const row of weekRows.filter((r) => r.rank === 1)) {
-        wins.set(row.userId, (wins.get(row.userId) ?? 0) + 1);
-      }
-    }
-  }
-
-  const rows: OverallRow[] = members
-    .filter((m) => m.status === "active")
-    .map((m) => ({
-      userId: m.user_id,
-      name: m.profiles?.display_name ?? "Unknown",
-      total: totals.get(m.user_id) ?? 0,
-      weeksWon: wins.get(m.user_id) ?? 0,
-      rank: 0,
-    }));
-
-  rows.sort(
-    (a, b) => b.total - a.total || b.weeksWon - a.weeksWon || a.name.localeCompare(b.name)
-  );
-  rows.forEach((row, i) => {
-    const prev = rows[i - 1];
-    row.rank =
-      i > 0 && prev.total === row.total && prev.weeksWon === row.weeksWon ? prev.rank : i + 1;
   });
   return rows;
 }

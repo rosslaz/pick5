@@ -2,10 +2,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ensureGamesSynced } from "@/lib/sync";
 import { latestActiveWeek } from "@/lib/weeks";
-import { buildOverallBoard, buildWeeklyBoard, type Slot } from "@/lib/scoring";
+import { buildWeeklyBoard } from "@/lib/scoring";
 import { TOTAL_WEEKS } from "@/lib/config";
 import { WeekPicker } from "@/components/week-picker";
-import type { Game, League, MemberRow, PickRow } from "@/lib/types";
+import { LeaderboardTable, type BoardRow } from "./leaderboard-table";
+import type { League, MemberRow, PickRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -50,18 +51,16 @@ export default async function LeaderboardPage({
       ? requested
       : currentWeek;
 
-  // Picks visible to the viewer are governed by RLS: opponents' picks only
-  // appear once their game has kicked off.
-  const { data: allPicks } = await supabase
+  // Only the selected week's picks are fetched in full (RLS governs what the
+  // viewer may see). A whole-season fetch would silently truncate at the
+  // API's 1000-row cap in a large league.
+  const { data: weekPicks } = await supabase
     .from("picks")
     .select("*, games(*)")
     .eq("league_id", league.id)
     .eq("season", league.season)
+    .eq("week", week)
     .returns<PickRow[]>();
-
-  const picks = allPicks ?? [];
-  const memberList = members ?? [];
-  const weeklyPicks = picks.filter((p) => p.week === week);
 
   // Which slots have a saved pick this week (no pick details), so submitted-
   // but-hidden renders differently from not-submitted.
@@ -76,182 +75,48 @@ export default async function LeaderboardPage({
     )
   );
 
-  const weekly = buildWeeklyBoard(memberList, weeklyPicks, user.id, submittedSlots);
+  // Season totals aggregated in the database (scales past the row cap and
+  // respects the Sunday-slate reveal rule).
+  const { data: overall } = await supabase.rpc("get_overall_totals", {
+    p_league_id: league.id,
+    p_season: league.season,
+  });
+  const overallMap = new Map<string, { total: number; weeks_won: number }>(
+    ((overall as { user_id: string; total: number; weeks_won: number }[] | null) ?? []).map(
+      (o) => [o.user_id, { total: o.total, weeks_won: o.weeks_won }]
+    )
+  );
 
-  const { data: allGamesMeta } = await supabase
-    .from("games")
-    .select("week, status")
-    .eq("season", league.season)
-    .returns<Pick<Game, "week" | "status">[]>();
-  const overall = buildOverallBoard(memberList, picks, allGamesMeta ?? [], user.id);
+  const memberList = members ?? [];
+  const weekly = buildWeeklyBoard(memberList, weekPicks ?? [], user.id, submittedSlots);
+  const rows: BoardRow[] = weekly.map((r) => ({
+    ...r,
+    overallTotal: overallMap.get(r.userId)?.total ?? 0,
+    weeksWon: overallMap.get(r.userId)?.weeks_won ?? 0,
+  }));
 
   return (
     <main>
-      <h1 className="mb-3 text-3xl">Leaderboard</h1>
-
-      <section className="mb-8">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-2xl text-amber">Week {week}</h2>
-          <span className="text-xs text-muted">
-            Opponent picks stay hidden until the Sunday 1:00 ET slate kicks off
-          </span>
-        </div>
-        <WeekPicker
-          basePath={`/league/${league.id}/leaderboard`}
-          selected={week}
-          current={currentWeek}
-        />
-        <div className="card overflow-x-auto">
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr className="border-b border-line text-xs uppercase text-muted">
-                <th className="px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Player</th>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <th key={n} className="px-2 py-2 text-center font-medium">
-                    P{n}
-                  </th>
-                ))}
-                <th className="px-3 py-2 text-right font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {weekly.map((row) => (
-                <tr
-                  key={row.userId}
-                  className={`border-b border-line/60 ${
-                    row.userId === user.id ? "bg-amber/5" : ""
-                  }`}
-                >
-                  <td className="px-3 py-2 font-display text-lg text-muted">{row.rank}</td>
-                  <td className="px-3 py-2 font-semibold">
-                    {row.name}
-                    {row.userId === user.id && (
-                      <span className="ml-1 text-xs text-amber">you</span>
-                    )}
-                  </td>
-                  {row.slots.map((slot, i) => (
-                    <td key={i} className="px-2 py-2 text-center">
-                      <SlotCell slot={slot} />
-                    </td>
-                  ))}
-                  <td className="px-3 py-2 text-right">
-                    <span className="score-cell">{row.total}</span>
-                  </td>
-                </tr>
-              ))}
-              {weekly.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-muted">
-                    No active players yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-2 text-xs text-muted">
-          🔒 pick submitted, hidden until the Sunday 1:00 slate (later games reveal at their
-          own kickoff) · -- no pick submitted · Tiebreaker: highest Pick 1 points, then Pick
-          2, and so on.
-        </p>
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-2xl text-amber">Overall</h2>
-        <div className="card overflow-x-auto">
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr className="border-b border-line text-xs uppercase text-muted">
-                <th className="px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Player</th>
-                <th className="px-3 py-2 text-center font-medium">Weeks won</th>
-                <th className="px-3 py-2 text-right font-medium">Season total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overall.map((row) => (
-                <tr
-                  key={row.userId}
-                  className={`border-b border-line/60 ${
-                    row.userId === user.id ? "bg-amber/5" : ""
-                  }`}
-                >
-                  <td className="px-3 py-2 font-display text-lg text-muted">{row.rank}</td>
-                  <td className="px-3 py-2 font-semibold">
-                    {row.name}
-                    {row.userId === user.id && (
-                      <span className="ml-1 text-xs text-amber">you</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-center text-muted">{row.weeksWon}</td>
-                  <td className="px-3 py-2 text-right">
-                    <span className="score-cell">{row.total}</span>
-                  </td>
-                </tr>
-              ))}
-              {overall.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-muted">
-                    No active players yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-2 text-xs text-muted">
-          Overall ties broken by number of weeks won.
-        </p>
-      </section>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-3xl">
+          Leaderboard <span className="text-amber">— Week {week}</span>
+        </h1>
+        <span className="text-xs text-muted">
+          Opponent picks stay hidden until the Sunday 1:00 ET slate kicks off
+        </span>
+      </div>
+      <WeekPicker
+        basePath={`/league/${league.id}/leaderboard`}
+        selected={week}
+        current={currentWeek}
+      />
+      <LeaderboardTable rows={rows} viewerId={user.id} />
+      <p className="mt-2 text-xs text-muted">
+        # = weekly rank · 🔒 pick submitted, hidden until the Sunday 1:00 slate (later games
+        reveal at their own kickoff) · -- no pick submitted · Week ties break by Pick 1
+        points, then Pick 2, and so on · Overall ties break by weeks won (hover an Overall
+        total to see them).
+      </p>
     </main>
-  );
-}
-
-function SlotCell({ slot }: { slot: Slot }) {
-  if (slot.kind === "empty")
-    return (
-      <span className="score-cell dim" title="No pick submitted">
-        --
-      </span>
-    );
-  if (slot.kind === "hidden")
-    return (
-      <span className="score-cell dim" title="Pick submitted — hidden until the Sunday 1:00 ET slate kicks off">
-        🔒
-      </span>
-    );
-
-  const { result, pick, game } = slot;
-  const abbr = pick.picked_home ? game.home_abbr : game.away_abbr;
-
-  if (result.state === "win")
-    return (
-      <span className="score-cell" title={`${abbr} won`}>
-        {result.points}
-      </span>
-    );
-  if (result.state === "loss")
-    return (
-      <span className="score-cell dim" title={`${abbr} lost`}>
-        0
-      </span>
-    );
-  if (result.state === "tie")
-    return (
-      <span className="score-cell dim" title="Tie — no points">
-        0
-      </span>
-    );
-  if (result.state === "live")
-    return (
-      <span className="score-cell live pulse-live" title={`${abbr} — in progress`}>
-        {abbr}
-      </span>
-    );
-  return (
-    <span className="score-cell dim" title={`${abbr} — not started`}>
-      {abbr}
-    </span>
   );
 }
