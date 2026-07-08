@@ -63,6 +63,36 @@ export function AdminClient({
     }
   }
 
+  function exportPlayersCsv() {
+    const rows = [
+      ["Name", "Email", "Role", "Status", "Joined"],
+      ...members.map((m) => [
+        m.profiles?.display_name ?? "",
+        m.profiles?.email ?? "",
+        m.role,
+        m.status,
+        new Date(m.joined_at).toLocaleDateString("en-US"),
+      ]),
+    ];
+    // Quote every field and escape embedded quotes so names with commas survive.
+    const csv = rows
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\r\n");
+    // BOM so spreadsheet apps detect UTF-8.
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const slug =
+      league.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+      "league";
+    a.download = `${slug}-players.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function sync(body: { season: number; week?: number; full?: boolean }) {
     setSyncMsg(null);
     setErr(null);
@@ -184,7 +214,17 @@ export function AdminClient({
 
       {/* Members */}
       <section className="card p-5">
-        <h2 className="text-2xl">Players</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-2xl">Players</h2>
+          <button
+            className="btn-ghost px-3 py-1 text-sm"
+            type="button"
+            onClick={exportPlayersCsv}
+            title="Download every player's name and email as a CSV file"
+          >
+            Export CSV
+          </button>
+        </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">
             <thead>
