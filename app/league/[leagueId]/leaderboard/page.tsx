@@ -93,7 +93,7 @@ export default async function LeaderboardPage({
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="text-2xl text-amber">Week {week}</h2>
           <span className="text-xs text-muted">
-            Opponent picks reveal at each game&apos;s kickoff
+            Opponent picks stay hidden until the Sunday 1:00 ET slate kicks off
           </span>
         </div>
         <WeekPicker
@@ -151,8 +151,9 @@ export default async function LeaderboardPage({
           </table>
         </div>
         <p className="mt-2 text-xs text-muted">
-          🔒 pick submitted, hidden until kickoff · -- no pick submitted · Tiebreaker:
-          highest Pick 1 points, then Pick 2, and so on.
+          🔒 pick submitted, hidden until the Sunday 1:00 slate (later games reveal at their
+          own kickoff) · -- no pick submitted · Tiebreaker: highest Pick 1 points, then Pick
+          2, and so on.
         </p>
       </section>
 
@@ -216,7 +217,7 @@ function SlotCell({ slot }: { slot: Slot }) {
     );
   if (slot.kind === "hidden")
     return (
-      <span className="score-cell dim" title="Pick submitted — hidden until kickoff">
+      <span className="score-cell dim" title="Pick submitted — hidden until the Sunday 1:00 ET slate kicks off">
         🔒
       </span>
     );
