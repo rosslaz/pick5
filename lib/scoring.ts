@@ -119,7 +119,9 @@ export function buildOverallBoard(
     }
     const weekGames = allGames.filter((g) => g.week === week);
     const weekDone = weekGames.length > 0 && weekGames.every((g) => g.status === "final");
-    if (weekDone && weekRows.length > 0) {
+    // A week only produces a winner once every game is final AND someone
+    // actually scored — otherwise an empty week hands everyone a "win".
+    if (weekDone && weekRows.length > 0 && weekRows[0].total > 0) {
       for (const row of weekRows.filter((r) => r.rank === 1)) {
         wins.set(row.userId, (wins.get(row.userId) ?? 0) + 1);
       }

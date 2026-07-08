@@ -8,6 +8,7 @@ import { PicksForm } from "./picks-form";
 import type { Game, League, PickRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export default async function PicksPage({
   params,

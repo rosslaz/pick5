@@ -1,12 +1,19 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { latestActiveWeek } from "@/lib/weeks";
+import { TOTAL_WEEKS } from "@/lib/config";
 import type { Game, League, MemberRow } from "@/lib/types";
 import { AdminClient } from "./admin-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage({ params }: { params: { leagueId: string } }) {
+export default async function AdminPage({
+  params,
+  searchParams,
+}: {
+  params: { leagueId: string };
+  searchParams: { week?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -40,7 +47,13 @@ export default async function AdminPage({ params }: { params: { leagueId: string
     .from("games")
     .select("week, status, kickoff")
     .eq("season", league.season);
-  const week = latestActiveWeek(weekMeta ?? []);
+  const currentWeek = latestActiveWeek(weekMeta ?? []);
+
+  const requested = Number(searchParams.week);
+  const week =
+    Number.isInteger(requested) && requested >= 1 && requested <= TOTAL_WEEKS
+      ? requested
+      : currentWeek;
 
   const { data: weekGames } = await supabase
     .from("games")
@@ -56,6 +69,7 @@ export default async function AdminPage({ params }: { params: { leagueId: string
       members={members ?? []}
       currentUserId={user.id}
       week={week}
+      currentWeek={currentWeek}
       weekGames={weekGames ?? []}
       gamesLoaded={(weekMeta ?? []).length > 0}
     />

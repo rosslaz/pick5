@@ -41,8 +41,9 @@ export async function ensureGamesSynced(supabase: SupabaseClient, season: number
       .eq("season", season);
 
     if (!games || games.length === 0) {
-      // First run: pull the full season schedule.
-      await invokeSync(token, { season, full: true });
+      // No schedule loaded yet. Don't block a page render on an 18-week ESPN
+      // pull — the admin loads the season once from the Admin tab, and the
+      // picks page shows a pointer there in the meantime.
       return;
     }
 

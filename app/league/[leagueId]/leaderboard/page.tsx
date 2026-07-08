@@ -8,6 +8,7 @@ import { WeekPicker } from "@/components/week-picker";
 import type { Game, League, MemberRow, PickRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export default async function LeaderboardPage({
   params,

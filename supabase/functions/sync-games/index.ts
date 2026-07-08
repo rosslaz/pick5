@@ -51,11 +51,25 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    let pinnedSkipped = 0;
     if (rows.length > 0) {
-      const { error } = await supabase
+      // Never overwrite a game an admin has manually corrected.
+      const { data: pinned, error: pinErr } = await supabase
         .from("games")
-        .upsert(rows, { onConflict: "espn_id" });
-      if (error) return json({ error: error.message }, 500);
+        .select("espn_id")
+        .eq("manual_override", true);
+      if (pinErr) return json({ error: pinErr.message }, 500);
+      const pinnedIds = new Set((pinned ?? []).map((p: { espn_id: string }) => p.espn_id));
+      const writable = rows.filter((r) => !pinnedIds.has(r.espn_id));
+      pinnedSkipped = rows.length - writable.length;
+
+      if (writable.length > 0) {
+        const { error } = await supabase
+          .from("games")
+          .upsert(writable, { onConflict: "espn_id" });
+        if (error) return json({ error: error.message }, 500);
+      }
+      return json({ upserted: writable.length, pinned: pinnedSkipped });
     }
 
     return json({ upserted: rows.length });

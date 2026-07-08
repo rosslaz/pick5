@@ -58,6 +58,15 @@ export default function RegisterPage() {
       return;
     }
 
+    // Supabase returns a placeholder user with no identities when the email
+    // is already registered (to avoid leaking who has an account). No email
+    // will arrive in that case, so point the person at sign-in instead.
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setError("An account with this email may already exist — try signing in instead.");
+      setBusy(false);
+      return;
+    }
+
     // Email confirmation is on: the invite code is stored on the account and
     // applied automatically on first sign-in.
     setConfirmSent(true);

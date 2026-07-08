@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { invokeSync } from "@/lib/sync";
 import { KickoffTime } from "@/components/kickoff-time";
+import { WeekPicker } from "@/components/week-picker";
 import type { Game, League, MemberRow } from "@/lib/types";
 import {
   regenerateInviteCode,
+  releaseOverride,
   setMemberRole,
   setMemberStatus,
   setScore,
@@ -18,6 +20,7 @@ export function AdminClient({
   members,
   currentUserId,
   week,
+  currentWeek,
   weekGames,
   gamesLoaded,
 }: {
@@ -25,6 +28,7 @@ export function AdminClient({
   members: MemberRow[];
   currentUserId: string;
   week: number;
+  currentWeek: number;
   weekGames: Game[];
   gamesLoaded: boolean;
 }) {
@@ -68,10 +72,12 @@ export function AdminClient({
       if (!token) throw new Error("Session expired — sign in again.");
       const result = await invokeSync(token, body);
       const n = (result?.upserted as number) ?? 0;
+      const pinned = (result?.pinned as number) ?? 0;
       setSyncMsg(
-        body.full
+        (body.full
           ? `Synced the full ${league.season} schedule (${n} games).`
-          : `Synced week ${body.week} (${n} games).`
+          : `Synced week ${body.week} (${n} games).`) +
+          (pinned > 0 ? ` Skipped ${pinned} pinned game${pinned > 1 ? "s" : ""}.` : "")
       );
       router.refresh();
     } catch (e) {
@@ -79,6 +85,17 @@ export function AdminClient({
     } finally {
       setSyncing(false);
     }
+  }
+
+  async function unpin(game: Game) {
+    setErr(null);
+    const res = await releaseOverride(league.id, game.id);
+    if (res.error) {
+      setErr(res.error);
+      return;
+    }
+    // Hand the game back to ESPN and immediately re-pull the real data.
+    await sync({ season: league.season, week: game.week });
   }
 
   return (
@@ -227,13 +244,29 @@ export function AdminClient({
       <section className="card p-5">
         <h2 className="text-2xl">Score override — week {week}</h2>
         <p className="mt-1 text-sm text-muted">
-          Only needed if ESPN is wrong or late. Saving marks the game final and updates the
-          leaderboard. This affects every league using this game.
+          Only needed if ESPN is wrong or late. Saving marks the game final and{" "}
+          <span className="text-ink">pins</span> it, so ESPN syncs can&apos;t overwrite your
+          correction. Unpin to hand a game back to ESPN. Overrides affect every league using
+          this game.
         </p>
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3">
+          <WeekPicker
+            basePath={`/league/${league.id}/admin`}
+            selected={week}
+            current={currentWeek}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
           {weekGames.length === 0 && <p className="text-muted">No games loaded for this week.</p>}
           {weekGames.map((g) => (
-            <ScoreRow key={g.id} game={g} leagueId={league.id} disabled={pending} onError={setErr} />
+            <ScoreRow
+              key={g.id}
+              game={g}
+              leagueId={league.id}
+              disabled={pending || syncing}
+              onError={setErr}
+              onUnpin={() => unpin(g)}
+            />
           ))}
         </div>
       </section>
@@ -246,11 +279,13 @@ function ScoreRow({
   leagueId,
   disabled,
   onError,
+  onUnpin,
 }: {
   game: Game;
   leagueId: string;
   disabled: boolean;
   onError: (msg: string | null) => void;
+  onUnpin: () => void;
 }) {
   const router = useRouter();
   const [home, setHome] = useState(game.home_score ?? 0);
@@ -265,6 +300,12 @@ function ScoreRow({
         </div>
         <div className="text-xs text-muted">
           <KickoffTime iso={game.kickoff} /> · {game.status}
+          {game.manual_override && (
+            <span className="text-amber" title="Manually corrected — ESPN sync skips this game">
+              {" "}
+              · pinned
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -306,6 +347,17 @@ function ScoreRow({
         >
           {pending ? "Saving…" : "Save final"}
         </button>
+        {game.manual_override && (
+          <button
+            className="btn-ghost px-3 py-1 text-sm"
+            disabled={disabled || pending}
+            type="button"
+            title="Remove the manual correction and re-pull this week from ESPN"
+            onClick={onUnpin}
+          >
+            Unpin
+          </button>
+        )}
       </div>
     </div>
   );

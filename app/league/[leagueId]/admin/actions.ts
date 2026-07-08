@@ -71,3 +71,17 @@ export async function setScore(
   revalidatePath(`/league/${leagueId}/leaderboard`);
   return {};
 }
+
+export async function releaseOverride(
+  leagueId: string,
+  gameId: string
+): Promise<{ error?: string }> {
+  const supabase = await client();
+  const { error } = await supabase.rpc("admin_release_override", {
+    p_game_id: gameId,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/league/${leagueId}/admin`);
+  revalidatePath(`/league/${leagueId}/leaderboard`);
+  return {};
+}

@@ -15,6 +15,7 @@ export interface Game {
   home_score: number | null;
   away_score: number | null;
   status: GameStatus;
+  manual_override: boolean;
   updated_at: string;
 }
 

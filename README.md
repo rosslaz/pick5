@@ -38,5 +38,6 @@ rotate the key or move projects, set `NEXT_PUBLIC_SUPABASE_URL` and
 1. Register with the seed league's invite code (**LIONUP**) - the first person
    to join becomes the commissioner (admin).
 2. In the Admin tab, click **Load season schedule** to pull all 18 weeks from
-   ESPN (this also happens automatically as players load pages).
+   ESPN (a required one-time step; after that, scores refresh automatically as
+   players load pages).
 3. Share your invite code with players. Regenerate it any time from Admin.

@@ -8,6 +8,10 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "sb_publishable_i_TugbDiRLMREkvwXGPRrg_EH9dSTYv";
 
+// Note: the active season each league uses lives in the database
+// (leagues.season, default 2026 set in migration 0001). When the app rolls to
+// a new season, update the DB default and existing league rows — this constant
+// is informational only.
 export const SEASON = 2026;
 export const TOTAL_WEEKS = 18;
 export const PICKS_PER_WEEK = 5;
