@@ -5,12 +5,19 @@ export const metadata: Metadata = {
   title: "Pick 5",
   description: "Pick five NFL winners a week. Score what your teams score.",
   appleWebApp: { capable: true, title: "Pick 5", statusBarStyle: "black" },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#030D1C",
+  themeColor: "#020E20",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

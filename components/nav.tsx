@@ -33,7 +33,9 @@ export function Nav({
   return (
     <header className="sticky top-0 z-20 -mx-3 mb-6 border-b border-line bg-pitch/95 px-3 pb-0 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-baseline gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Pick 5" className="h-9 w-auto shrink-0" />
           <span className="whitespace-nowrap font-display text-2xl font-bold uppercase tracking-wider text-amber">
             Pick 5
           </span>

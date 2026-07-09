@@ -5,15 +5,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // NFL palette: shield-navy field, red accent, silver-white ink.
+        // Dark theme tuned to the league's shield logo (p5_Logo.png):
+        // shield navy #013166, shield red #C9151E, white ink.
         // NOTE: the accent token is still named "amber" from the original
-        // scoreboard theme so class names didn't need renaming across every
-        // component — its value is now NFL red (#D50A0A).
-        pitch: "#030D1C",
-        surface: "#07203B",
-        raised: "#0D3059",
-        line: "rgba(126,167,216,0.16)",
-        amber: "#D50A0A",
+        // theme so class names didn't need renaming across every component.
+        pitch: "#020E20",
+        surface: "#052142",
+        raised: "#0A3562",
+        line: "rgba(126,167,216,0.18)",
+        amber: "#C9151E",
+        navy: "#013166",
         win: "#4ADE80",
         loss: "#F87171",
         ink: "#EAF1FA",

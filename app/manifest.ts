@@ -11,11 +11,12 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Pick five NFL winners a week. Score what your teams score.",
     start_url: "/",
     display: "standalone",
-    background_color: "#030D1C",
-    theme_color: "#030D1C",
+    background_color: "#020E20",
+    theme_color: "#020E20",
     icons: [
-      { src: "/icon", sizes: "512x512", type: "image/png" },
-      { src: "/icon", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }
