@@ -108,6 +108,25 @@ export async function setRemindersEnabled(
   return {};
 }
 
+export async function setReminderLeadHours(
+  leagueId: string,
+  hours: number
+): Promise<{ error?: string }> {
+  if (!Number.isInteger(hours) || hours < 1 || hours > 72) {
+    return { error: "Lead time must be a whole number of hours between 1 and 72." };
+  }
+  const supabase = await client();
+  const { error } = await supabase
+    .from("league_settings")
+    .upsert(
+      { league_id: leagueId, reminder_lead_hours: hours, updated_at: new Date().toISOString() },
+      { onConflict: "league_id" }
+    );
+  if (error) return { error: error.message };
+  revalidatePath(`/league/${leagueId}/admin`);
+  return {};
+}
+
 export async function releaseOverride(
   leagueId: string,
   gameId: string

@@ -1,27 +1,30 @@
-// Supabase Edge Function: emails players who haven't submitted all 5 picks
-// for the upcoming week, via Brevo (see pick5-email-reminders-decision.md).
-// One verified sender address is used app-wide; the sender *name* is set to
-// the league and replies go to the league's commissioner, so recipients see
-// league branding without any per-admin credentials.
+// Supabase Edge Function: sends pick reminders via Brevo, keyed off each
+// upcoming kickoff and a per-league lead time. See pick5-email-reminders-
+// decision.md for the provider decision.
+//
+// Two reminder types:
+//   * "slate"     — the Sunday 1:00 PM ET mass lock. One per person per week:
+//                   "you have X hours before all your picks lock."
+//   * a game id   — a standalone game that locks before (or after) the slate:
+//                   "you have X hours to get your pick in for AWAY vs HOME."
+//                   Only sent to players who could still pick that game
+//                   (fewer than 5 picks AND haven't already picked it).
+//
+// A run reminds about any kickoff falling within the league's lead-time
+// window. A dedupe table (reminder_log) guarantees each (person, key) is
+// emailed at most once, so the hourly cron is safe to re-run.
 //
 // Entry modes:
-//   * Scheduled: pg_cron calls with an x-reminder-secret header; processes
-//     every league that has reminders enabled.
+//   * Scheduled: pg_cron calls hourly with an x-reminder-secret header;
+//     processes every league that has reminders enabled.
 //   * Test: a league admin triggers from the Admin screen with their own
-//     login; processes just that league and ignores the kickoff window.
+//     login; processes just that league, widens the window, and emails the
+//     caller a single representative reminder (or a note if none are due).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const WINDOW_MS = 36 * 60 * 60 * 1000; // only remind when a kickoff is close
 const PICKS_PER_WEEK = 5;
-
-// Brevo's free tier allows 300 emails/day. We stop a scheduled run a little
-// short of that so a single run can never blow the whole daily quota, and so
-// there's headroom for test sends and a second run the same day. Anyone not
-// reached this run is picked up on the next scheduled run (reminders are
-// idempotent — a deferred send is not a lost send). Bump this if you upgrade
-// the Brevo plan. Test runs (force=true) ignore the budget: they only ever
-// email the single admin who clicked.
-const DAILY_SEND_BUDGET = 250;
+const DAILY_SEND_BUDGET = 250; // Brevo free tier is 300/day; leave headroom.
+const SLATE_HOUR_ET = 13; // Sunday 1:00 PM ET mass lock.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -34,6 +37,17 @@ interface LeagueRow {
   id: string;
   name: string;
   season: number;
+  leadHours: number;
+}
+
+interface GameRow {
+  id: string;
+  week: number;
+  kickoff: string;
+  away_abbr: string;
+  home_abbr: string;
+  away_team: string;
+  home_team: string;
 }
 
 interface SendOpts {
@@ -70,10 +84,16 @@ Deno.serve(async (req) => {
     if (scheduled) {
       const { data, error } = await service
         .from("leagues")
-        .select("id, name, season, league_settings!inner(reminders_enabled)")
+        .select("id, name, season, league_settings!inner(reminders_enabled, reminder_lead_hours)")
         .eq("league_settings.reminders_enabled", true);
       if (error) return json({ error: error.message }, 500);
-      leagues = (data ?? []).map((l) => ({ id: l.id, name: l.name, season: l.season }));
+      // deno-lint-ignore no-explicit-any
+      leagues = (data ?? []).map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        season: l.season,
+        leadHours: l.league_settings?.reminder_lead_hours ?? 3,
+      }));
     } else {
       // Admin-triggered test for one league.
       const auth = req.headers.get("Authorization") ?? "";
@@ -98,10 +118,20 @@ Deno.serve(async (req) => {
 
       const { data: lg } = await service
         .from("leagues")
-        .select("id, name, season")
+        .select("id, name, season, league_settings(reminder_lead_hours)")
         .eq("id", body.league_id)
         .single();
-      leagues = lg ? [lg] : [];
+      leagues = lg
+        ? [
+            {
+              id: lg.id,
+              name: lg.name,
+              season: lg.season,
+              // deno-lint-ignore no-explicit-any
+              leadHours: (lg as any).league_settings?.reminder_lead_hours ?? 3,
+            },
+          ]
+        : [];
       force = true;
       callerEmail = user.email ?? null;
     }
@@ -117,9 +147,6 @@ Deno.serve(async (req) => {
     }
 
     const opts: SendOpts = { force, apiKey, senderEmail, appUrl, callerEmail };
-    // Shared across every league in this run: Brevo meters per account/day,
-    // not per league. force runs (admin test) get an effectively unlimited
-    // budget since they only email the one caller.
     const budget = { remaining: force ? Number.MAX_SAFE_INTEGER : DAILY_SEND_BUDGET };
     const results = [];
     for (const league of leagues) {
@@ -127,7 +154,6 @@ Deno.serve(async (req) => {
     }
     const skipped = results.reduce((n, r) => n + ((r as { skipped?: number }).skipped ?? 0), 0);
     if (skipped > 0) {
-      // Loud log so it's visible in the function logs, not just the response.
       console.error(
         `[send-reminders] Daily budget of ${DAILY_SEND_BUDGET} hit — ${skipped} recipient(s) deferred to the next run.`
       );
@@ -138,6 +164,23 @@ Deno.serve(async (req) => {
   }
 });
 
+/** Is this kickoff the Sunday 1:00 PM ET mass-lock slate? */
+function isSlateAnchor(kickoff: Date): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Detroit",
+    weekday: "short",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(kickoff);
+  const wd = parts.find((p) => p.type === "weekday")?.value;
+  const hr = Number(parts.find((p) => p.type === "hour")?.value);
+  return wd === "Sun" && hr === SLATE_HOUR_ET;
+}
+
+function hoursUntil(kickoff: Date, now: number): number {
+  return Math.max(0, Math.round((kickoff.getTime() - now) / (60 * 60 * 1000)));
+}
+
 // deno-lint-ignore no-explicit-any
 async function processLeague(
   service: any,
@@ -145,133 +188,192 @@ async function processLeague(
   opts: SendOpts,
   budget: { remaining: number }
 ) {
-  const nowIso = new Date().toISOString();
+  const now = Date.now();
+  const windowMs = league.leadHours * 60 * 60 * 1000;
+  // Real run: kickoffs between now and the lead-time horizon. Test: widen the
+  // horizon so there's usually something to preview.
+  const horizon = new Date(now + (opts.force ? windowMs + 14 * 24 * 60 * 60 * 1000 : windowMs));
+
   const { data: games } = await service
     .from("games")
-    .select("week, kickoff")
+    .select("id, week, kickoff, away_abbr, home_abbr, away_team, home_team")
     .eq("season", league.season)
-    .gt("kickoff", nowIso)
+    .gt("kickoff", new Date(now).toISOString())
+    .lte("kickoff", horizon.toISOString())
     .order("kickoff", { ascending: true });
 
-  if (!games || games.length === 0) {
-    return { league: league.name, sent: 0, note: "No upcoming games — nothing to remind about." };
+  const upcoming: GameRow[] = games ?? [];
+  if (upcoming.length === 0) {
+    return { league: league.name, sent: 0, note: "No kickoffs inside the reminder window yet." };
   }
 
-  const week: number = games[0].week;
-  const firstKick = new Date(games[0].kickoff);
-  if (!opts.force && firstKick.getTime() - Date.now() > WINDOW_MS) {
-    return { league: league.name, week, sent: 0, note: "Kickoff isn't close enough yet." };
-  }
+  // In a test, only act on the single earliest upcoming kickoff.
+  const targets = opts.force ? upcoming.slice(0, 1) : upcoming;
 
   const { data: members } = await service
     .from("league_members")
-    .select("user_id, joined_at, role, profiles(display_name, email)")
+    .select("user_id, role, profiles(display_name, email)")
     .eq("league_id", league.id)
-    .eq("status", "active")
-    .order("joined_at", { ascending: true });
-  const { data: picks } = await service
-    .from("picks")
-    .select("user_id")
-    .eq("league_id", league.id)
-    .eq("season", league.season)
-    .eq("week", week);
-
-  // Replies go to the commissioner: the earliest-joined active admin.
+    .eq("status", "active");
   // deno-lint-ignore no-explicit-any
-  const commish = (members ?? []).find((m: any) => m.role === "admin");
-  const replyTo = commish?.profiles?.email
-    ? { email: commish.profiles.email, name: commish.profiles.display_name ?? "League admin" }
-    : null;
-  const senderName = `${league.name} Reminders`;
-
-  const counts = new Map<string, number>();
-  for (const p of picks ?? []) counts.set(p.user_id, (counts.get(p.user_id) ?? 0) + 1);
-
-  // deno-lint-ignore no-explicit-any
-  const laggards = (members ?? [])
-    .map((m: any) => ({
-      email: m.profiles?.email as string | undefined,
-      name: (m.profiles?.display_name as string | undefined) ?? "there",
-      count: counts.get(m.user_id) ?? 0,
-    }))
-    .filter((m: { email?: string; count: number }) => m.email && m.count < PICKS_PER_WEEK);
-
-  const kickText =
-    firstKick.toLocaleString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: "America/Detroit",
-    }) + " ET";
-
-  if (laggards.length === 0) {
-    if (opts.force && opts.callerEmail) {
-      const err = await sendEmail(
-        opts,
-        senderName,
-        replyTo,
-        opts.callerEmail,
-        null,
-        "Pick 5 test — reminders are working",
-        `<p>Test successful. Everyone in <b>${esc(league.name)}</b> already has all ${PICKS_PER_WEEK} picks in for Week ${week}, so no reminders were needed.</p>`
-      );
-      if (err) return { league: league.name, week, sent: 0, errors: [err] };
-      return {
-        league: league.name,
-        week,
-        sent: 1,
-        note: "Everyone has picks in — sent a test confirmation to your email instead.",
-      };
-    }
-    return { league: league.name, week, sent: 0, note: "Everyone has picks in." };
-  }
+  const activeMembers = (members ?? []).filter((m: any) => m.profiles?.email);
 
   let sent = 0;
   let skipped = 0;
   const errors: string[] = [];
-  for (const m of laggards) {
-    if (budget.remaining <= 0) {
-      // Out of daily quota — defer the rest to the next scheduled run.
-      skipped++;
-      continue;
+  const notes: string[] = [];
+
+  for (const game of targets) {
+    const kickoff = new Date(game.kickoff);
+    const hrs = hoursUntil(kickoff, now) || league.leadHours;
+    const slate = isSlateAnchor(kickoff);
+
+    const { data: picks } = await service
+      .from("picks")
+      .select("user_id, game_id")
+      .eq("league_id", league.id)
+      .eq("season", league.season)
+      .eq("week", game.week);
+    const countByUser = new Map<string, number>();
+    const pickedGameByUser = new Map<string, Set<string>>();
+    for (const p of picks ?? []) {
+      countByUser.set(p.user_id, (countByUser.get(p.user_id) ?? 0) + 1);
+      if (!pickedGameByUser.has(p.user_id)) pickedGameByUser.set(p.user_id, new Set());
+      pickedGameByUser.get(p.user_id)!.add(p.game_id);
     }
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px">
-        <h2 style="margin:0 0 8px">🏈 Missing your Week ${week} picks</h2>
-        <p>Hey ${esc(m.name)} — you have <b>${m.count} of ${PICKS_PER_WEEK}</b> picks in for Week ${week} in <b>${esc(league.name)}</b>.</p>
-        <p>First kickoff: <b>${kickText}</b>. Picks lock at each game's kickoff.</p>
-        ${
-          opts.appUrl
-            ? `<p><a href="${opts.appUrl}" style="background:#C9151E;color:#ffffff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Submit your picks →</a></p>`
-            : ""
-        }
-      </div>`;
-    const err = await sendEmail(
-      opts,
-      senderName,
-      replyTo,
-      m.email!,
-      m.name,
-      `Missing your Week ${week} picks`,
-      html
-    );
-    if (err) errors.push(`${m.email}: ${err}`);
-    else {
+
+    const reminderKey = slate ? `slate:${league.season}:${game.week}` : game.id;
+
+    const { data: already } = await service
+      .from("reminder_log")
+      .select("user_id")
+      .eq("league_id", league.id)
+      .eq("reminder_key", reminderKey);
+    const remindedUsers = new Set((already ?? []).map((r: { user_id: string }) => r.user_id));
+
+    // deno-lint-ignore no-explicit-any
+    const recipients = activeMembers.filter((m: any) => {
+      const count = countByUser.get(m.user_id) ?? 0;
+      if (count >= PICKS_PER_WEEK) return false; // done for the week
+      if (slate) return true; // slate: anyone short of 5
+      const picked = pickedGameByUser.get(m.user_id);
+      return !picked || !picked.has(game.id); // standalone: game still pickable
+    });
+
+    for (const m of recipients) {
+      if (opts.force) {
+        // Test: send one representative email to the caller, then stop.
+        const html = renderEmail(slate, m.profiles.display_name ?? "there", hrs, game, opts.appUrl);
+        const err = await sendEmail(
+          opts,
+          `${league.name} Reminders`,
+          replyToFor(activeMembers),
+          opts.callerEmail ?? m.profiles.email,
+          m.profiles.display_name ?? null,
+          subjectFor(slate, hrs, game),
+          html
+        );
+        if (err) return { league: league.name, sent: 0, errors: [`${opts.callerEmail}: ${err}`] };
+        return {
+          league: league.name,
+          sent: 1,
+          note: `Test sent a ${slate ? "Sunday-lock" : "standalone-game"} reminder to your email.`,
+        };
+      }
+
+      if (remindedUsers.has(m.user_id)) continue; // deduped
+      if (budget.remaining <= 0) {
+        skipped++;
+        continue;
+      }
+      const html = renderEmail(slate, m.profiles.display_name ?? "there", hrs, game, opts.appUrl);
+      const err = await sendEmail(
+        opts,
+        `${league.name} Reminders`,
+        replyToFor(activeMembers),
+        m.profiles.email,
+        m.profiles.display_name ?? null,
+        subjectFor(slate, hrs, game),
+        html
+      );
+      if (err) {
+        errors.push(`${m.profiles.email}: ${err}`);
+        continue;
+      }
+      await service.from("reminder_log").insert({
+        league_id: league.id,
+        user_id: m.user_id,
+        reminder_key: reminderKey,
+      });
       sent++;
       budget.remaining--;
     }
+
+    if (!opts.force && recipients.length > 0) {
+      notes.push(
+        `${slate ? "Sunday lock" : `${game.away_abbr}@${game.home_abbr}`}: ${recipients.length} eligible`
+      );
+    }
+  }
+
+  if (opts.force) {
+    return {
+      league: league.name,
+      sent: 0,
+      note: "Nobody is currently eligible for a reminder (picks are already in for the upcoming game).",
+    };
   }
 
   return {
     league: league.name,
-    week,
-    missing: laggards.length,
     sent,
     ...(skipped > 0 ? { skipped } : {}),
+    ...(notes.length > 0 ? { detail: notes } : {}),
     ...(errors.length > 0 ? { errors } : {}),
   };
+}
+
+// deno-lint-ignore no-explicit-any
+function replyToFor(members: any[]): { email: string; name: string } | null {
+  const commish = members.find((m) => m.role === "admin");
+  return commish?.profiles?.email
+    ? { email: commish.profiles.email, name: commish.profiles.display_name ?? "League admin" }
+    : null;
+}
+
+function subjectFor(slate: boolean, hrs: number, game: GameRow): string {
+  return slate
+    ? `${hrs}h before your Week ${game.week} picks lock`
+    : `${hrs}h to pick ${game.away_abbr} @ ${game.home_abbr}`;
+}
+
+function renderEmail(
+  slate: boolean,
+  name: string,
+  hrs: number,
+  game: GameRow,
+  appUrl: string
+): string {
+  const cta = appUrl
+    ? `<p><a href="${appUrl}" style="background:#C9151E;color:#ffffff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Get them in now →</a></p>`
+    : "";
+  if (slate) {
+    return `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px">
+        <h2 style="margin:0 0 8px">🏈 Picks lock soon</h2>
+        <p>Hi ${esc(name)},</p>
+        <p>You have <b>${hrs} hours</b> before all of your picks are locked for the week. Get them in now!</p>
+        ${cta}
+      </div>`;
+  }
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px">
+      <h2 style="margin:0 0 8px">🏈 A game is about to lock</h2>
+      <p>Hi ${esc(name)},</p>
+      <p>You have <b>${hrs} hours</b> to get your pick in for tonight's game between
+      <b>${esc(game.away_team)}</b> and <b>${esc(game.home_team)}</b>.</p>
+      ${cta}
+    </div>`;
 }
 
 async function sendEmail(

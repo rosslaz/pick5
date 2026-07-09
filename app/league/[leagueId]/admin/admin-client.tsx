@@ -14,6 +14,7 @@ import {
   renameLeague,
   setMemberRole,
   setMemberStatus,
+  setReminderLeadHours,
   setRemindersEnabled,
   setScore,
 } from "./actions";
@@ -27,6 +28,7 @@ export function AdminClient({
   weekGames,
   gamesLoaded,
   remindersEnabled,
+  reminderLeadHours,
 }: {
   league: League;
   members: MemberRow[];
@@ -36,12 +38,14 @@ export function AdminClient({
   weekGames: Game[];
   gamesLoaded: boolean;
   remindersEnabled: boolean;
+  reminderLeadHours: number;
 }) {
   const router = useRouter();
   const [code, setCode] = useState(league.invite_code);
   const [name, setName] = useState(league.name);
   const [copied, setCopied] = useState(false);
   const [reminders, setReminders] = useState(remindersEnabled);
+  const [leadHours, setLeadHours] = useState(String(reminderLeadHours));
   const [reminderMsg, setReminderMsg] = useState<{ text: string; error: boolean } | null>(null);
   const [testingReminder, setTestingReminder] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -129,6 +133,23 @@ export function AdminClient({
         setReminders(!next); // roll back
         setReminderMsg({ text: res.error, error: true });
       }
+    });
+  }
+
+  function saveLeadHours() {
+    setReminderMsg(null);
+    const n = Number(leadHours);
+    if (!Number.isInteger(n) || n < 1 || n > 72) {
+      setReminderMsg({ text: "Lead time must be a whole number of hours from 1 to 72.", error: true });
+      return;
+    }
+    startTransition(async () => {
+      const res = await setReminderLeadHours(league.id, n);
+      setReminderMsg(
+        res.error
+          ? { text: res.error, error: true }
+          : { text: `Lead time saved: reminders go out ${n} hour${n === 1 ? "" : "s"} before kickoff.`, error: false }
+      );
     });
   }
 
@@ -228,9 +249,11 @@ export function AdminClient({
       <section className="card p-5">
         <h2 className="text-2xl">Email reminders</h2>
         <p className="mt-1 text-sm text-muted">
-          When enabled, players who haven&apos;t submitted all 5 picks get a nudge as kickoff
-          approaches (Thursday and Sunday). Emails show <b>{league.name}</b> as the sender and
-          replies go to the commissioner. Needs Brevo email keys set up — see the README.
+          When enabled, players get nudged before kickoff if they can still make a pick. Weeknight
+          and Saturday games send a per-game reminder; the Sunday 1:00 ET slate sends a
+          &quot;your picks lock soon&quot; reminder to anyone short of 5. Emails show{" "}
+          <b>{league.name}</b> as the sender and replies go to the commissioner. Needs Brevo email
+          keys set up — see the README.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
@@ -251,6 +274,24 @@ export function AdminClient({
             onClick={sendTestReminder}
           >
             {testingReminder ? "Sending…" : "Send test now"}
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <label htmlFor="lead-hours" className="text-sm text-muted">
+            Send reminders
+          </label>
+          <input
+            id="lead-hours"
+            type="number"
+            min={1}
+            max={72}
+            value={leadHours}
+            onChange={(e) => setLeadHours(e.target.value)}
+            className="input w-20"
+          />
+          <span className="text-sm text-muted">hours before each kickoff.</span>
+          <button className="btn-ghost" type="button" disabled={pending} onClick={saveLeadHours}>
+            Save
           </button>
         </div>
         {reminderMsg && (
