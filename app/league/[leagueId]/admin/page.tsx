@@ -63,6 +63,12 @@ export default async function AdminPage({
     .order("kickoff", { ascending: true })
     .returns<Game[]>();
 
+  const { data: settings } = await supabase
+    .from("league_settings")
+    .select("reminders_enabled")
+    .eq("league_id", league.id)
+    .maybeSingle();
+
   return (
     <AdminClient
       league={league}
@@ -72,6 +78,7 @@ export default async function AdminPage({
       currentWeek={currentWeek}
       weekGames={weekGames ?? []}
       gamesLoaded={(weekMeta ?? []).length > 0}
+      remindersEnabled={settings?.reminders_enabled ?? false}
     />
   );
 }

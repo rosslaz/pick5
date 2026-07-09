@@ -91,6 +91,23 @@ export async function renameLeague(
   return {};
 }
 
+export async function setRemindersEnabled(
+  leagueId: string,
+  enabled: boolean
+): Promise<{ error?: string }> {
+  const supabase = await client();
+  // RLS (league_settings policies, migration 0010) restricts this to admins.
+  const { error } = await supabase
+    .from("league_settings")
+    .upsert(
+      { league_id: leagueId, reminders_enabled: enabled, updated_at: new Date().toISOString() },
+      { onConflict: "league_id" }
+    );
+  if (error) return { error: error.message };
+  revalidatePath(`/league/${leagueId}/admin`);
+  return {};
+}
+
 export async function releaseOverride(
   leagueId: string,
   gameId: string

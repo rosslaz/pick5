@@ -26,6 +26,29 @@ export async function invokeSync(
 }
 
 /**
+ * Admin-only: fire the send-reminders edge function in test mode for one
+ * league. Returns the parsed JSON either way so the caller can surface the
+ * note/error (e.g. "email isn't configured yet").
+ */
+export async function invokeReminderTest(accessToken: string, leagueId: string) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-reminders`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: SUPABASE_ANON_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ league_id: leagueId }),
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error ?? `send-reminders failed: ${res.status}`);
+  }
+  return data;
+}
+
+/**
  * Keeps the games table fresh without a paid cron: any page load checks staleness
  * and triggers the edge function (which pulls from ESPN) when needed.
  */

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { invokeSync } from "@/lib/sync";
+import { invokeSync, invokeReminderTest } from "@/lib/sync";
 import { downloadCsv, slugify } from "@/lib/csv";
 import { KickoffTime } from "@/components/kickoff-time";
 import { WeekPicker } from "@/components/week-picker";
@@ -14,6 +14,7 @@ import {
   renameLeague,
   setMemberRole,
   setMemberStatus,
+  setRemindersEnabled,
   setScore,
 } from "./actions";
 
@@ -25,6 +26,7 @@ export function AdminClient({
   currentWeek,
   weekGames,
   gamesLoaded,
+  remindersEnabled,
 }: {
   league: League;
   members: MemberRow[];
@@ -33,11 +35,15 @@ export function AdminClient({
   currentWeek: number;
   weekGames: Game[];
   gamesLoaded: boolean;
+  remindersEnabled: boolean;
 }) {
   const router = useRouter();
   const [code, setCode] = useState(league.invite_code);
   const [name, setName] = useState(league.name);
   const [copied, setCopied] = useState(false);
+  const [reminders, setReminders] = useState(remindersEnabled);
+  const [reminderMsg, setReminderMsg] = useState<{ text: string; error: boolean } | null>(null);
+  const [testingReminder, setTestingReminder] = useState(false);
   const [pending, startTransition] = useTransition();
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -114,6 +120,40 @@ export function AdminClient({
     await sync({ season: league.season, week: game.week });
   }
 
+  function toggleReminders(next: boolean) {
+    setReminderMsg(null);
+    setReminders(next); // optimistic
+    startTransition(async () => {
+      const res = await setRemindersEnabled(league.id, next);
+      if (res.error) {
+        setReminders(!next); // roll back
+        setReminderMsg({ text: res.error, error: true });
+      }
+    });
+  }
+
+  async function sendTestReminder() {
+    setReminderMsg(null);
+    setTestingReminder(true);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Session expired — sign in again.");
+      const result = await invokeReminderTest(token, league.id);
+      const r = result?.results?.[0];
+      const note = r?.note ?? (r ? `Sent ${r.sent} reminder(s).` : "Test complete.");
+      setReminderMsg({ text: note, error: false });
+    } catch (e) {
+      setReminderMsg({
+        text: e instanceof Error ? e.message : "Test failed.",
+        error: true,
+      });
+    } finally {
+      setTestingReminder(false);
+    }
+  }
+
   return (
     <main className="flex flex-col gap-8">
       <h1 className="text-3xl">Admin — {league.name}</h1>
@@ -171,6 +211,42 @@ export function AdminClient({
             Regenerate
           </button>
         </div>
+      </section>
+
+      {/* Email reminders */}
+      <section className="card p-5">
+        <h2 className="text-2xl">Email reminders</h2>
+        <p className="mt-1 text-sm text-muted">
+          When enabled, players who haven&apos;t submitted all 5 picks get a nudge as kickoff
+          approaches (Thursday and Sunday). Emails show <b>{league.name}</b> as the sender and
+          replies go to the commissioner. Needs Brevo email keys set up — see the README.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            className={reminders ? "btn-ghost" : "btn-amber"}
+            type="button"
+            disabled={pending}
+            onClick={() => toggleReminders(!reminders)}
+          >
+            {reminders ? "Turn off" : "Turn on"}
+          </button>
+          <span className="text-sm text-muted">
+            Reminders are <b className={reminders ? "text-win" : "text-loss"}>{reminders ? "on" : "off"}</b>.
+          </span>
+          <button
+            className="btn-ghost"
+            type="button"
+            disabled={testingReminder}
+            onClick={sendTestReminder}
+          >
+            {testingReminder ? "Sending…" : "Send test now"}
+          </button>
+        </div>
+        {reminderMsg && (
+          <p className={`mt-3 text-sm ${reminderMsg.error ? "text-loss" : "text-win"}`}>
+            {reminderMsg.text}
+          </p>
+        )}
       </section>
 
       {/* Schedule sync */}
