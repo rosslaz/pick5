@@ -142,8 +142,19 @@ export function AdminClient({
       if (!token) throw new Error("Session expired — sign in again.");
       const result = await invokeReminderTest(token, league.id);
       const r = result?.results?.[0];
-      const note = r?.note ?? (r ? `Sent ${r.sent} reminder(s).` : "Test complete.");
-      setReminderMsg({ text: note, error: false });
+      // Surface real outcomes — a failed send must never look like success.
+      if (r?.errors?.length) {
+        setReminderMsg({
+          text: `Send failed for ${r.errors.length} recipient(s). First error: ${r.errors[0]}`,
+          error: true,
+        });
+      } else if (typeof r?.sent === "number" && r.sent > 0 && !r?.note) {
+        const extra = r.skipped ? ` (${r.skipped} deferred — daily cap reached)` : "";
+        setReminderMsg({ text: `Sent ${r.sent} reminder(s).${extra}`, error: false });
+      } else {
+        const note = r?.note ?? "Test complete.";
+        setReminderMsg({ text: note, error: false });
+      }
     } catch (e) {
       setReminderMsg({
         text: e instanceof Error ? e.message : "Test failed.",
