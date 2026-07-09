@@ -18,8 +18,8 @@
 //   * Scheduled: pg_cron calls hourly with an x-reminder-secret header;
 //     processes every league that has reminders enabled.
 //   * Test: a league admin triggers from the Admin screen with their own
-//     login; processes just that league, widens the window, and emails the
-//     caller a single representative reminder (or a note if none are due).
+//     login; processes just that league, finds the next scheduled game (no
+//     horizon cap), and emails the caller one representative reminder.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const PICKS_PER_WEEK = 5;
@@ -190,21 +190,32 @@ async function processLeague(
 ) {
   const now = Date.now();
   const windowMs = league.leadHours * 60 * 60 * 1000;
-  // Real run: kickoffs between now and the lead-time horizon. Test: widen the
-  // horizon so there's usually something to preview.
-  const horizon = new Date(now + (opts.force ? windowMs + 14 * 24 * 60 * 60 * 1000 : windowMs));
 
-  const { data: games } = await service
+  // Real run: only kickoffs inside the lead-time window are due. Test run: no
+  // horizon at all — grab the single next upcoming game in the season so a
+  // preview always works, even in the offseason when Week 1 is months away.
+  let query = service
     .from("games")
     .select("id, week, kickoff, away_abbr, home_abbr, away_team, home_team")
     .eq("season", league.season)
     .gt("kickoff", new Date(now).toISOString())
-    .lte("kickoff", horizon.toISOString())
     .order("kickoff", { ascending: true });
+  if (opts.force) {
+    query = query.limit(1);
+  } else {
+    query = query.lte("kickoff", new Date(now + windowMs).toISOString());
+  }
+  const { data: games } = await query;
 
   const upcoming: GameRow[] = games ?? [];
   if (upcoming.length === 0) {
-    return { league: league.name, sent: 0, note: "No kickoffs inside the reminder window yet." };
+    return {
+      league: league.name,
+      sent: 0,
+      note: opts.force
+        ? "No upcoming games are scheduled at all — load the season schedule first (Admin → sync)."
+        : "No kickoffs inside the reminder window yet.",
+    };
   }
 
   // In a test, only act on the single earliest upcoming kickoff.
@@ -225,7 +236,9 @@ async function processLeague(
 
   for (const game of targets) {
     const kickoff = new Date(game.kickoff);
-    const hrs = hoursUntil(kickoff, now) || league.leadHours;
+    // Real run: true hours to kickoff. Test run: show the configured lead time
+    // so a months-out preview reads "3 hours", not "1400 hours".
+    const hrs = opts.force ? league.leadHours : hoursUntil(kickoff, now) || league.leadHours;
     const slate = isSlateAnchor(kickoff);
 
     const { data: picks } = await service
