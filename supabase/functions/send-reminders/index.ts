@@ -14,6 +14,15 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const WINDOW_MS = 36 * 60 * 60 * 1000; // only remind when a kickoff is close
 const PICKS_PER_WEEK = 5;
 
+// Brevo's free tier allows 300 emails/day. We stop a scheduled run a little
+// short of that so a single run can never blow the whole daily quota, and so
+// there's headroom for test sends and a second run the same day. Anyone not
+// reached this run is picked up on the next scheduled run (reminders are
+// idempotent — a deferred send is not a lost send). Bump this if you upgrade
+// the Brevo plan. Test runs (force=true) ignore the budget: they only ever
+// email the single admin who clicked.
+const DAILY_SEND_BUDGET = 250;
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -108,18 +117,34 @@ Deno.serve(async (req) => {
     }
 
     const opts: SendOpts = { force, apiKey, senderEmail, appUrl, callerEmail };
+    // Shared across every league in this run: Brevo meters per account/day,
+    // not per league. force runs (admin test) get an effectively unlimited
+    // budget since they only email the one caller.
+    const budget = { remaining: force ? Number.MAX_SAFE_INTEGER : DAILY_SEND_BUDGET };
     const results = [];
     for (const league of leagues) {
-      results.push(await processLeague(service, league, opts));
+      results.push(await processLeague(service, league, opts, budget));
     }
-    return json({ results });
+    const skipped = results.reduce((n, r) => n + ((r as { skipped?: number }).skipped ?? 0), 0);
+    if (skipped > 0) {
+      // Loud log so it's visible in the function logs, not just the response.
+      console.error(
+        `[send-reminders] Daily budget of ${DAILY_SEND_BUDGET} hit — ${skipped} recipient(s) deferred to the next run.`
+      );
+    }
+    return json({ budget: DAILY_SEND_BUDGET, skipped, results });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "reminder run failed" }, 500);
   }
 });
 
 // deno-lint-ignore no-explicit-any
-async function processLeague(service: any, league: LeagueRow, opts: SendOpts) {
+async function processLeague(
+  service: any,
+  league: LeagueRow,
+  opts: SendOpts,
+  budget: { remaining: number }
+) {
   const nowIso = new Date().toISOString();
   const { data: games } = await service
     .from("games")
@@ -204,8 +229,14 @@ async function processLeague(service: any, league: LeagueRow, opts: SendOpts) {
   }
 
   let sent = 0;
+  let skipped = 0;
   const errors: string[] = [];
   for (const m of laggards) {
+    if (budget.remaining <= 0) {
+      // Out of daily quota — defer the rest to the next scheduled run.
+      skipped++;
+      continue;
+    }
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px">
         <h2 style="margin:0 0 8px">🏈 Missing your Week ${week} picks</h2>
@@ -227,7 +258,10 @@ async function processLeague(service: any, league: LeagueRow, opts: SendOpts) {
       html
     );
     if (err) errors.push(`${m.email}: ${err}`);
-    else sent++;
+    else {
+      sent++;
+      budget.remaining--;
+    }
   }
 
   return {
@@ -235,6 +269,7 @@ async function processLeague(service: any, league: LeagueRow, opts: SendOpts) {
     week,
     missing: laggards.length,
     sent,
+    ...(skipped > 0 ? { skipped } : {}),
     ...(errors.length > 0 ? { errors } : {}),
   };
 }
