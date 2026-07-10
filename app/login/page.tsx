@@ -58,6 +58,12 @@ export default function LoginPage() {
         <button className="btn-amber mt-2" disabled={busy} type="submit">
           {busy ? "Signing in…" : "Sign in"}
         </button>
+        <Link
+          className="mt-1 text-center text-sm text-muted hover:underline"
+          href="/forgot-password"
+        >
+          Forgot your password?
+        </Link>
       </form>
       <p className="mt-4 text-center text-sm text-muted">
         Have an invite code?{" "}
