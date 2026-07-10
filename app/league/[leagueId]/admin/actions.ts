@@ -127,6 +127,28 @@ export async function setReminderLeadHours(
   return {};
 }
 
+export async function setScoreFromWeek(
+  leagueId: string,
+  fromWeek: number | null
+): Promise<{ error?: string }> {
+  if (fromWeek !== null && (!Number.isInteger(fromWeek) || fromWeek < 1 || fromWeek > 30)) {
+    return { error: "Start week must be a whole number between 1 and 30." };
+  }
+  const supabase = await client();
+  // RLS restricts league_settings writes to admins. Null clears the reset
+  // (undo) and returns standings to counting the whole season.
+  const { error } = await supabase
+    .from("league_settings")
+    .upsert(
+      { league_id: leagueId, score_from_week: fromWeek, updated_at: new Date().toISOString() },
+      { onConflict: "league_id" }
+    );
+  if (error) return { error: error.message };
+  revalidatePath(`/league/${leagueId}/admin`);
+  revalidatePath(`/league/${leagueId}/leaderboard`);
+  return {};
+}
+
 export async function releaseOverride(
   leagueId: string,
   gameId: string

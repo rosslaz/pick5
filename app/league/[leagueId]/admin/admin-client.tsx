@@ -17,6 +17,7 @@ import {
   setReminderLeadHours,
   setRemindersEnabled,
   setScore,
+  setScoreFromWeek,
 } from "./actions";
 
 export function AdminClient({
@@ -29,6 +30,7 @@ export function AdminClient({
   gamesLoaded,
   remindersEnabled,
   reminderLeadHours,
+  scoreFromWeek,
 }: {
   league: League;
   members: MemberRow[];
@@ -39,6 +41,7 @@ export function AdminClient({
   gamesLoaded: boolean;
   remindersEnabled: boolean;
   reminderLeadHours: number;
+  scoreFromWeek: number | null;
 }) {
   const router = useRouter();
   const [code, setCode] = useState(league.invite_code);
@@ -48,6 +51,8 @@ export function AdminClient({
   const [leadHours, setLeadHours] = useState(String(reminderLeadHours));
   const [reminderMsg, setReminderMsg] = useState<{ text: string; error: boolean } | null>(null);
   const [testingReminder, setTestingReminder] = useState(false);
+  const [resetWeek, setResetWeek] = useState(String(scoreFromWeek ?? currentWeek));
+  const [resetMsg, setResetMsg] = useState<{ text: string; error: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -153,6 +158,37 @@ export function AdminClient({
     });
   }
 
+  function applyReset() {
+    setResetMsg(null);
+    const n = Number(resetWeek);
+    if (!Number.isInteger(n) || n < 1 || n > 30) {
+      setResetMsg({ text: "Pick a start week between 1 and 30.", error: true });
+      return;
+    }
+    startTransition(async () => {
+      const res = await setScoreFromWeek(league.id, n);
+      setResetMsg(
+        res.error
+          ? { text: res.error, error: true }
+          : { text: `Overall standings now count from Week ${n} onward.`, error: false }
+      );
+      if (!res.error) router.refresh();
+    });
+  }
+
+  function undoReset() {
+    setResetMsg(null);
+    startTransition(async () => {
+      const res = await setScoreFromWeek(league.id, null);
+      setResetMsg(
+        res.error
+          ? { text: res.error, error: true }
+          : { text: "Reset undone — standings count the full season again.", error: false }
+      );
+      if (!res.error) router.refresh();
+    });
+  }
+
   async function sendTestReminder() {
     setReminderMsg(null);
     setTestingReminder(true);
@@ -243,6 +279,52 @@ export function AdminClient({
             Regenerate
           </button>
         </div>
+      </section>
+
+      {/* Season score reset (half-season payouts) */}
+      <section className="card p-5">
+        <h2 className="text-2xl">Overall standings window</h2>
+        <p className="mt-1 text-sm text-muted">
+          For leagues that pay out each half separately, you can make the{" "}
+          <b>Overall</b> standings count only from a chosen week onward. This never deletes any
+          picks or scores — weekly results are untouched, and you can undo it any time to restore
+          the full-season total.
+        </p>
+        {scoreFromWeek ? (
+          <p className="mt-2 text-sm">
+            Currently counting{" "}
+            <b className="text-amber">from Week {scoreFromWeek} onward</b>.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-muted">Currently counting the full season.</p>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label htmlFor="reset-week" className="text-sm text-muted">
+            Count from week
+          </label>
+          <input
+            id="reset-week"
+            type="number"
+            min={1}
+            max={30}
+            value={resetWeek}
+            onChange={(e) => setResetWeek(e.target.value)}
+            className="input w-20"
+          />
+          <button className="btn-amber" type="button" disabled={pending} onClick={applyReset}>
+            Apply
+          </button>
+          {scoreFromWeek && (
+            <button className="btn-ghost" type="button" disabled={pending} onClick={undoReset}>
+              Undo (full season)
+            </button>
+          )}
+        </div>
+        {resetMsg && (
+          <p className={`mt-3 text-sm ${resetMsg.error ? "text-loss" : "text-win"}`}>
+            {resetMsg.text}
+          </p>
+        )}
       </section>
 
       {/* Email reminders */}

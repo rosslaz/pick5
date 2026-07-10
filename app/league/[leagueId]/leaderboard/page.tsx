@@ -75,11 +75,21 @@ export default async function LeaderboardPage({
     )
   );
 
+  // Half-season segment: if the commish set a "count from week N" marker, the
+  // overall standings (and movement) count only weeks >= N. Null = whole season.
+  const { data: lbSettings } = await supabase
+    .from("league_settings")
+    .select("score_from_week")
+    .eq("league_id", league.id)
+    .maybeSingle();
+  const scoreFromWeek: number | null = lbSettings?.score_from_week ?? null;
+
   // Season totals aggregated in the database (scales past the row cap and
   // respects the Sunday-slate reveal rule).
   const { data: overall } = await supabase.rpc("get_overall_totals", {
     p_league_id: league.id,
     p_season: league.season,
+    p_from_week: scoreFromWeek,
   });
   const overallMap = new Map<
     string,
@@ -139,11 +149,17 @@ export default async function LeaderboardPage({
       .filter(([, done]) => done)
       .map(([w]) => w)
   );
-  if (lastCompleted >= 2) {
+  // Within a half-season segment, movement is only meaningful once 2+ weeks
+  // *inside* the segment are complete, and the prior snapshot must not dip
+  // below the segment's start week.
+  const segmentStart = scoreFromWeek ?? 1;
+  const completedInSegment = lastCompleted - segmentStart + 1;
+  if (completedInSegment >= 2) {
     const { data: prior } = await supabase.rpc("get_overall_totals", {
       p_league_id: league.id,
       p_season: league.season,
       p_through_week: lastCompleted - 1,
+      p_from_week: scoreFromWeek,
     });
     const priorMap = new Map<string, { total: number; weeks_won: number }>(
       ((prior as { user_id: string; total: number; weeks_won: number }[] | null) ?? []).map((o) => [

@@ -1,17 +1,24 @@
--- 0012: add optional p_through_week to get_overall_totals so the leaderboard
--- can compute "standings as of last week" for movement arrows (and reuse the
--- same capping for half-season resets later). Null = all weeks (unchanged
--- behavior).
+-- 0013: half-season "reset". Rather than deleting anything, the commish sets a
+-- week to start counting overall standings FROM (e.g. week 10 for a second-half
+-- payout). Null = count the whole season (default). Undo = set it back to null.
+-- get_overall_totals gains a p_from_week floor to mirror the existing
+-- p_through_week ceiling; together they let the leaderboard window any range.
 --
 -- NOTE: adding a parameter changes the function's arity, which Postgres treats
--- as a NEW function rather than replacing the old one. Drop the prior 2-arg
--- version first so only one get_overall_totals exists after this runs.
-drop function if exists public.get_overall_totals(uuid, integer);
+-- as a NEW function rather than replacing the old one. We drop the prior arity
+-- explicitly so only one get_overall_totals exists (see 0014 for the fix that
+-- had to clean this up on the live DB when it was first missed).
+drop function if exists public.get_overall_totals(uuid, integer, integer);
+
+alter table public.league_settings
+  add column score_from_week integer
+  check (score_from_week is null or score_from_week between 1 and 30);
 
 create or replace function public.get_overall_totals(
   p_league_id uuid,
   p_season integer,
-  p_through_week integer default null
+  p_through_week integer default null,
+  p_from_week integer default null
 )
 returns table(user_id uuid, total integer, weeks_won integer, wins integer, losses integer)
 language sql
@@ -48,6 +55,7 @@ as $function$
       and p.season = p_season
       and greatest(g.kickoff, a.reveal_floor) <= now()
       and (p_through_week is null or p.week <= p_through_week)
+      and (p_from_week is null or p.week >= p_from_week)
   ),
   records as (
     select user_id,
