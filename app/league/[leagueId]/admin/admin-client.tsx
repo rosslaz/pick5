@@ -62,6 +62,7 @@ export function AdminClient({
   const [testingReminder, setTestingReminder] = useState(false);
   const [resetWeek, setResetWeek] = useState(String(scoreFromWeek ?? currentWeek));
   const [resetMsg, setResetMsg] = useState<{ text: string; error: boolean } | null>(null);
+  const [tab, setTab] = useState<"settings" | "games" | "players">("games");
   const [pending, startTransition] = useTransition();
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -236,6 +237,32 @@ export function AdminClient({
       <h1 className="text-3xl">Admin — {league.name}</h1>
       {err && <p className="rounded-lg border border-loss/40 bg-loss/10 px-3 py-2 text-loss">{err}</p>}
 
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-line">
+        {(
+          [
+            ["games", "Game admin"],
+            ["players", "Players"],
+            ["settings", "Settings"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+              tab === key
+                ? "border-amber text-ink"
+                : "border-transparent text-muted hover:text-ink"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ===== SETTINGS TAB ===== */}
+      <div className={`flex-col gap-8 ${tab === "settings" ? "flex" : "hidden"}`}>
       {/* League name */}
       <section className="card p-5">
         <h2 className="text-2xl">League name</h2>
@@ -391,7 +418,11 @@ export function AdminClient({
           </p>
         )}
       </section>
+      </div>
+      {/* ===== END SETTINGS TAB ===== */}
 
+      {/* ===== GAME ADMIN TAB (part 1: schedule sync) ===== */}
+      <div className={`flex-col gap-8 ${tab === "games" ? "flex" : "hidden"}`}>
       {/* Schedule sync */}
       <section className="card p-5">
         <h2 className="text-2xl">NFL schedule &amp; scores</h2>
@@ -414,7 +445,11 @@ export function AdminClient({
         </div>
         {syncMsg && <p className="mt-2 text-sm text-win">{syncMsg}</p>}
       </section>
+      </div>
+      {/* ===== END GAME ADMIN part 1 ===== */}
 
+      {/* ===== PLAYERS TAB ===== */}
+      <div className={`flex-col gap-8 ${tab === "players" ? "flex" : "hidden"}`}>
       {/* Members */}
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -509,7 +544,11 @@ export function AdminClient({
           </table>
         </div>
       </section>
+      </div>
+      {/* ===== END PLAYERS TAB ===== */}
 
+      {/* ===== GAME ADMIN TAB (part 2: score override + audit) ===== */}
+      <div className={`flex-col gap-8 ${tab === "games" ? "flex" : "hidden"}`}>
       {/* Score override */}
       <section className="card p-5">
         <h2 className="text-2xl">Score override — week {week}</h2>
@@ -603,6 +642,8 @@ export function AdminClient({
           </div>
         )}
       </section>
+      </div>
+      {/* ===== END GAME ADMIN part 2 ===== */}
     </main>
   );
 }
