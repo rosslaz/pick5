@@ -107,6 +107,19 @@ export default async function LeaderboardPage({
 
   const memberList = members ?? [];
   const weekly = buildWeeklyBoard(memberList, weekPicks ?? [], user.id, submittedSlots);
+
+  // Perfect-slate jackpot: flag anyone who nailed the 5 highest-scoring winning
+  // teams in exact order this week. The function self-gates on a fully-final
+  // week, so this returns nothing (and reveals nothing) before the week locks.
+  const { data: perfect } = await supabase.rpc("get_perfect_slates", {
+    p_league_id: league.id,
+    p_season: league.season,
+    p_week: week,
+  });
+  const perfectSet = new Set(
+    ((perfect as { user_id: string }[] | null) ?? []).map((p) => p.user_id)
+  );
+
   const rows: BoardRow[] = weekly.map((r) => {
     const o = overallMap.get(r.userId);
     return {
@@ -117,6 +130,7 @@ export default async function LeaderboardPage({
       losses: o?.losses ?? 0,
       overallRank: 0,
       movement: 0,
+      perfectSlate: perfectSet.has(r.userId),
     };
   });
 

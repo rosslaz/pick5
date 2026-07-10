@@ -11,6 +11,7 @@ export type BoardRow = WeeklyRow & {
   losses: number;
   overallRank: number;
   movement: number;
+  perfectSlate: boolean;
 };
 
 type SortCol = "name" | "week" | "overall";
@@ -147,7 +148,11 @@ export function LeaderboardTable({
             <tr
               key={row.userId}
               className={`border-b border-line/60 ${
-                row.userId === viewerId ? "bg-amber/5" : ""
+                row.perfectSlate
+                  ? "bg-gradient-to-r from-yellow-400/15 to-transparent"
+                  : row.userId === viewerId
+                  ? "bg-amber/5"
+                  : ""
               }`}
             >
               <td
@@ -163,6 +168,14 @@ export function LeaderboardTable({
               </td>
               <td className="px-3 py-2 font-semibold">
                 {row.name}
+                {row.perfectSlate && (
+                  <span
+                    className="ml-2 rounded-full bg-yellow-400/20 px-2 py-0.5 font-body text-xs font-bold text-yellow-300"
+                    title="Perfect slate — picked the 5 highest-scoring winning teams in exact order. Jackpot!"
+                  >
+                    🏆 PERFECT SLATE
+                  </span>
+                )}
                 <span
                   className="ml-2 font-body text-xs font-normal text-muted"
                   title="Season pick record (a tied game counts as a loss)"
