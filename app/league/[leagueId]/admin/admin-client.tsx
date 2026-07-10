@@ -31,6 +31,7 @@ export function AdminClient({
   remindersEnabled,
   reminderLeadHours,
   scoreFromWeek,
+  auditRows,
 }: {
   league: League;
   members: MemberRow[];
@@ -42,6 +43,14 @@ export function AdminClient({
   remindersEnabled: boolean;
   reminderLeadHours: number;
   scoreFromWeek: number | null;
+  auditRows: {
+    display_name: string;
+    pick_order: number;
+    change_type: string;
+    old_team: string | null;
+    new_team: string | null;
+    changed_at: string;
+  }[];
 }) {
   const router = useRouter();
   const [code, setCode] = useState(league.invite_code);
@@ -530,6 +539,69 @@ export function AdminClient({
             />
           ))}
         </div>
+      </section>
+
+      {/* Pick audit log (lock-gated: only visible once the week is final) */}
+      <section className="card p-5">
+        <h2 className="text-2xl">Pick audit — week {week}</h2>
+        <p className="mt-1 text-sm text-muted">
+          A record of every pick change for this week, viewable only after the week is fully
+          locked (all games final), so it can never reveal picks early. Only changes made from
+          when this feature launched are recorded.
+        </p>
+        {auditRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">
+            Nothing to show — either the week isn&apos;t fully locked yet, or no pick changes were
+            recorded for it.
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-muted">
+                  <th className="px-2 py-1 font-normal">When</th>
+                  <th className="px-2 py-1 font-normal">Player</th>
+                  <th className="px-2 py-1 font-normal">Slot</th>
+                  <th className="px-2 py-1 font-normal">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditRows.map((r, i) => (
+                  <tr key={i} className="border-b border-line/50">
+                    <td className="px-2 py-1 text-muted">
+                      {new Date(r.changed_at).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="px-2 py-1 font-semibold">{r.display_name}</td>
+                    <td className="px-2 py-1">Pick {r.pick_order}</td>
+                    <td className="px-2 py-1">
+                      {r.change_type === "add" && (
+                        <span>
+                          added <b className="text-win">{r.new_team}</b>
+                        </span>
+                      )}
+                      {r.change_type === "replace" && (
+                        <span>
+                          <b className="text-loss">{r.old_team}</b> →{" "}
+                          <b className="text-win">{r.new_team}</b>
+                        </span>
+                      )}
+                      {r.change_type === "remove" && (
+                        <span>
+                          removed <b className="text-loss">{r.old_team}</b>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </main>
   );

@@ -69,6 +69,14 @@ export default async function AdminPage({
     .eq("league_id", league.id)
     .maybeSingle();
 
+  // Pick audit for the viewed week. The function is lock-gated: it returns rows
+  // only when the week is fully final, so this can't reveal picks early.
+  const { data: audit } = await supabase.rpc("get_pick_audit", {
+    p_league_id: league.id,
+    p_season: league.season,
+    p_week: week,
+  });
+
   return (
     <AdminClient
       league={league}
@@ -81,6 +89,18 @@ export default async function AdminPage({
       remindersEnabled={settings?.reminders_enabled ?? false}
       reminderLeadHours={settings?.reminder_lead_hours ?? 3}
       scoreFromWeek={settings?.score_from_week ?? null}
+      auditRows={
+        (audit as
+          | {
+              display_name: string;
+              pick_order: number;
+              change_type: string;
+              old_team: string | null;
+              new_team: string | null;
+              changed_at: string;
+            }[]
+          | null) ?? []
+      }
     />
   );
 }
