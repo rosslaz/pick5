@@ -10,6 +10,7 @@ export type BoardRow = WeeklyRow & {
   wins: number;
   losses: number;
   overallRank: number;
+  movement: number;
 };
 
 type SortCol = "name" | "week" | "overall";
@@ -153,7 +154,12 @@ export function LeaderboardTable({
                 className="px-3 py-2 font-display text-lg text-muted"
                 title={col === "overall" ? "Overall rank" : "Weekly rank"}
               >
-                {col === "overall" ? row.overallRank : row.rank}
+                <span className="inline-flex items-center gap-1">
+                  {col === "overall" ? row.overallRank : row.rank}
+                  {col === "overall" && row.movement !== 0 && (
+                    <MovementArrow delta={row.movement} />
+                  )}
+                </span>
               </td>
               <td className="px-3 py-2 font-semibold">
                 {row.name}
@@ -194,6 +200,20 @@ export function LeaderboardTable({
       </table>
       </div>
     </div>
+  );
+}
+
+/** Rank movement since last completed week. delta>0 = moved up. */
+function MovementArrow({ delta }: { delta: number }) {
+  const up = delta > 0;
+  return (
+    <span
+      className={`font-body text-xs font-semibold ${up ? "text-win" : "text-loss"}`}
+      title={`${up ? "Up" : "Down"} ${Math.abs(delta)} since last week`}
+    >
+      {up ? "▲" : "▼"}
+      {Math.abs(delta)}
+    </span>
   );
 }
 

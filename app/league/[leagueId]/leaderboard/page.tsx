@@ -106,6 +106,7 @@ export default async function LeaderboardPage({
       wins: o?.wins ?? 0,
       losses: o?.losses ?? 0,
       overallRank: 0,
+      movement: 0,
     };
   });
 
@@ -121,6 +122,53 @@ export default async function LeaderboardPage({
         ? prev.overallRank
         : i + 1;
   });
+
+  // Movement arrow: compare each player's current overall rank to their rank
+  // as of the previous completed week. Only meaningful once 2+ weeks are done.
+  const weekDone = new Map<number, boolean>();
+  for (const g of (await supabase
+    .from("games")
+    .select("week, status")
+    .eq("season", league.season)
+    .returns<{ week: number; status: string }[]>()).data ?? []) {
+    weekDone.set(g.week, (weekDone.get(g.week) ?? true) && g.status === "final");
+  }
+  const lastCompleted = Math.max(
+    0,
+    ...Array.from(weekDone.entries())
+      .filter(([, done]) => done)
+      .map(([w]) => w)
+  );
+  if (lastCompleted >= 2) {
+    const { data: prior } = await supabase.rpc("get_overall_totals", {
+      p_league_id: league.id,
+      p_season: league.season,
+      p_through_week: lastCompleted - 1,
+    });
+    const priorMap = new Map<string, { total: number; weeks_won: number }>(
+      ((prior as { user_id: string; total: number; weeks_won: number }[] | null) ?? []).map((o) => [
+        o.user_id,
+        { total: o.total, weeks_won: o.weeks_won },
+      ])
+    );
+    const priorRanked = [...rows]
+      .map((r) => ({ userId: r.userId, ...(priorMap.get(r.userId) ?? { total: 0, weeks_won: 0 }) }))
+      .sort((a, b) => b.total - a.total || b.weeks_won - a.weeks_won);
+    const priorRank = new Map<string, number>();
+    priorRanked.forEach((r, i) => {
+      const prev = priorRanked[i - 1];
+      priorRank.set(
+        r.userId,
+        i > 0 && prev.total === r.total && prev.weeks_won === r.weeks_won
+          ? priorRank.get(prev.userId)!
+          : i + 1
+      );
+    });
+    for (const r of rows) {
+      const was = priorRank.get(r.userId);
+      r.movement = was ? was - r.overallRank : 0; // + = moved up
+    }
+  }
 
   const isAdmin = memberList.some(
     (m) => m.user_id === user.id && m.role === "admin" && m.status === "active"

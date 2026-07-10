@@ -58,6 +58,11 @@ export function PicksForm({
   const slotOf = (gameId: string) => slots.findIndex((s) => s?.gameId === gameId);
   const used = slots.filter(Boolean).length;
 
+  // Confirmation-banner state: how many picks are actually persisted. After a
+  // successful save, router.refresh() updates initialPicks, so this reflects
+  // saved state (not live edits, which `dirty` tracks separately).
+  const savedCount = initialSlots.filter(Boolean).length;
+
   const dirty = useMemo(
     () =>
       slots.some((s, i) => {
@@ -129,7 +134,33 @@ export function PicksForm({
   }
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div>
+      {savedCount > 0 && (
+        <div
+          className={`mb-4 flex flex-wrap items-center gap-x-2 rounded-lg border px-4 py-3 text-sm ${
+            savedCount === PICKS_PER_WEEK && !dirty
+              ? "border-win/40 bg-win/10 text-win"
+              : "border-amber/40 bg-amber/10 text-ink"
+          }`}
+        >
+          {savedCount === PICKS_PER_WEEK && !dirty ? (
+            <span className="font-semibold">
+              ✓ You&apos;re locked in for Week {week} — all {PICKS_PER_WEEK} picks saved.
+            </span>
+          ) : dirty ? (
+            <span>
+              <b>Unsaved changes.</b> {savedCount} of {PICKS_PER_WEEK} picks are currently saved —
+              hit Save picks to update.
+            </span>
+          ) : (
+            <span>
+              <b>{savedCount} of {PICKS_PER_WEEK} picks saved.</b> Add {PICKS_PER_WEEK - savedCount}{" "}
+              more and save to lock in your week.
+            </span>
+          )}
+        </div>
+      )}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-3">
         {games.map((game) => {
           const locked = isLocked(game.id);
@@ -261,6 +292,7 @@ export function PicksForm({
           )}
         </div>
       </aside>
+    </div>
     </div>
   );
 }
