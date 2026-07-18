@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Nav } from "@/components/nav";
@@ -34,6 +35,32 @@ export default async function LeagueLayout({
 
   const role =
     memberships?.find((m) => m.league_id === params.leagueId)?.role ?? "player";
+
+  // League rules: fetched once, used both for the acceptance gate and to decide
+  // whether the nav shows a Rules link.
+  const { data: rulesRow } = await supabase.rpc("get_league_rules", {
+    p_league_id: params.leagueId,
+  });
+  const r = (
+    rulesRow as
+      | { rules_text: string | null; rules_required: boolean; accepted: boolean }[]
+      | null
+  )?.[0];
+  const hasRules = !!r?.rules_text;
+
+  // Gate: if the commissioner requires acceptance and this member hasn't
+  // accepted, send them to the acceptance page. Enforcing here (rather than at
+  // join time) covers every entry path — the join page, register-with-code, and
+  // auto-join — plus anyone who joined before rules were turned on.
+  // Admins are exempt so a commissioner can never lock themselves out of the
+  // Admin screen where the rules are edited. The accept-rules page itself is
+  // exempt, otherwise it would redirect to itself forever.
+  const pathname = headers().get("x-pathname") ?? "";
+  const onAcceptPage = pathname.endsWith("/accept-rules");
+  if (role !== "admin" && !onAcceptPage && r?.rules_required && hasRules && !r.accepted) {
+    redirect(`/league/${params.leagueId}/accept-rules`);
+  }
+
   const leagues =
     memberships
       ?.map((m) => {
@@ -44,7 +71,7 @@ export default async function LeagueLayout({
 
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-3 pb-16 sm:px-6">
-      <Nav league={league} leagues={leagues} isAdmin={role === "admin"} />
+      <Nav league={league} leagues={leagues} isAdmin={role === "admin"} hasRules={hasRules} />
       {children}
     </div>
   );

@@ -65,7 +65,9 @@ export default async function AdminPage({
 
   const { data: settings } = await supabase
     .from("league_settings")
-    .select("reminders_enabled, reminder_lead_hours, score_from_week")
+    .select(
+      "reminders_enabled, reminder_lead_hours, score_from_week, rules_text, rules_required"
+    )
     .eq("league_id", league.id)
     .maybeSingle();
 
@@ -89,6 +91,8 @@ export default async function AdminPage({
       remindersEnabled={settings?.reminders_enabled ?? false}
       reminderLeadHours={settings?.reminder_lead_hours ?? 3}
       scoreFromWeek={settings?.score_from_week ?? null}
+      rulesText={settings?.rules_text ?? ""}
+      rulesRequired={settings?.rules_required ?? false}
       auditRows={
         (audit as
           | {

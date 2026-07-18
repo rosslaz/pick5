@@ -149,6 +149,35 @@ export async function setScoreFromWeek(
   return {};
 }
 
+export async function saveLeagueRules(
+  leagueId: string,
+  rulesText: string,
+  rulesRequired: boolean
+): Promise<{ error?: string }> {
+  const supabase = await client();
+  const trimmed = rulesText.trim();
+  // Requiring acceptance with no rules written would lock everyone out of the
+  // league behind an empty page, so refuse that combination.
+  if (rulesRequired && trimmed.length === 0) {
+    return { error: "Add some rules text before requiring players to accept it." };
+  }
+  const { error } = await supabase
+    .from("league_settings")
+    .upsert(
+      {
+        league_id: leagueId,
+        rules_text: trimmed.length > 0 ? trimmed : null,
+        rules_required: rulesRequired,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "league_id" }
+    );
+  if (error) return { error: error.message };
+  revalidatePath(`/league/${leagueId}/admin`);
+  revalidatePath(`/league/${leagueId}/rules`);
+  return {};
+}
+
 export async function releaseOverride(
   leagueId: string,
   gameId: string

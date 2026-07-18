@@ -9,10 +9,12 @@ export function Nav({
   league,
   leagues,
   isAdmin,
+  hasRules,
 }: {
   league: League;
   leagues: { id: string; name: string }[];
   isAdmin: boolean;
+  hasRules?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -20,6 +22,7 @@ export function Nav({
   const tabs = [
     { href: `/league/${league.id}/picks`, label: "Picks" },
     { href: `/league/${league.id}/leaderboard`, label: "Leaderboard" },
+    ...(hasRules ? [{ href: `/league/${league.id}/rules`, label: "Rules" }] : []),
     ...(isAdmin ? [{ href: `/league/${league.id}/admin`, label: "Admin" }] : []),
   ];
 

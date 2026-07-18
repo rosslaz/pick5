@@ -5,7 +5,13 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  // Expose the current path to server components (used by the league layout to
+  // exempt the accept-rules page from the rules gate). Next doesn't give
+  // layouts the pathname directly, so we pass it through a request header.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       getAll() {
@@ -13,7 +19,7 @@ export async function middleware(request: NextRequest) {
       },
       setAll(cookiesToSet: CookieToSet[]) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options)
         );

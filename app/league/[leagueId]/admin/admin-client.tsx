@@ -12,6 +12,7 @@ import {
   regenerateInviteCode,
   releaseOverride,
   renameLeague,
+  saveLeagueRules,
   setMemberRole,
   setMemberStatus,
   setReminderLeadHours,
@@ -32,6 +33,8 @@ export function AdminClient({
   reminderLeadHours,
   scoreFromWeek,
   auditRows,
+  rulesText,
+  rulesRequired,
 }: {
   league: League;
   members: MemberRow[];
@@ -51,6 +54,8 @@ export function AdminClient({
     new_team: string | null;
     changed_at: string;
   }[];
+  rulesText: string;
+  rulesRequired: boolean;
 }) {
   const router = useRouter();
   const [code, setCode] = useState(league.invite_code);
@@ -62,7 +67,10 @@ export function AdminClient({
   const [testingReminder, setTestingReminder] = useState(false);
   const [resetWeek, setResetWeek] = useState(String(scoreFromWeek ?? currentWeek));
   const [resetMsg, setResetMsg] = useState<{ text: string; error: boolean } | null>(null);
-  const [tab, setTab] = useState<"settings" | "games" | "players">("games");
+  const [tab, setTab] = useState<"settings" | "games" | "players" | "rules">("games");
+  const [rules, setRules] = useState(rulesText);
+  const [requireRules, setRequireRules] = useState(rulesRequired);
+  const [rulesMsg, setRulesMsg] = useState<{ text: string; error: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -168,6 +176,24 @@ export function AdminClient({
     });
   }
 
+  function saveRules() {
+    setRulesMsg(null);
+    startTransition(async () => {
+      const res = await saveLeagueRules(league.id, rules, requireRules);
+      setRulesMsg(
+        res.error
+          ? { text: res.error, error: true }
+          : {
+              text: requireRules
+                ? "Rules saved. New players must accept them before entering the league."
+                : "Rules saved.",
+              error: false,
+            }
+      );
+      if (!res.error) router.refresh();
+    });
+  }
+
   function applyReset() {
     setResetMsg(null);
     const n = Number(resetWeek);
@@ -243,6 +269,7 @@ export function AdminClient({
           [
             ["games", "Game admin"],
             ["players", "Players"],
+            ["rules", "Rules"],
             ["settings", "Settings"],
           ] as const
         ).map(([key, label]) => (
@@ -260,6 +287,66 @@ export function AdminClient({
           </button>
         ))}
       </div>
+
+      {/* ===== RULES TAB ===== */}
+      <div className={`flex-col gap-8 ${tab === "rules" ? "flex" : "hidden"}`}>
+        <section className="card p-5">
+          <h2 className="text-2xl">League rules</h2>
+          <p className="mt-1 text-sm text-muted">
+            Write your league&apos;s rules here — buy-in, payouts, tiebreaks, deadlines, whatever
+            your group agrees on. Once saved, they&apos;re available to every player any time from
+            the <b>Rules</b> link in the nav.
+          </p>
+
+          <label className="mt-4 flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-amber"
+              checked={requireRules}
+              onChange={(e) => setRequireRules(e.target.checked)}
+            />
+            <span className="text-sm">
+              <b>Display rules at sign up.</b>
+              <span className="block text-muted">
+                New players must read and accept these rules before they can use the league.
+                Anyone who joined earlier and hasn&apos;t accepted will be asked the next time
+                they open the league.
+              </span>
+            </span>
+          </label>
+
+          <label htmlFor="rules-text" className="mt-4 block text-sm text-muted">
+            Rules
+          </label>
+          <textarea
+            id="rules-text"
+            className="input mt-1 min-h-[16rem] w-full font-body leading-relaxed"
+            placeholder={"e.g.\n1. $20 buy-in, due before Week 1.\n2. Picks lock at each game's kickoff.\n3. Ties count as a loss.\n4. Perfect slate takes the jackpot."}
+            value={rules}
+            onChange={(e) => setRules(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted">
+            Plain text. Line breaks are preserved exactly as you type them.
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button className="btn-amber" type="button" disabled={pending} onClick={saveRules}>
+              Save rules
+            </button>
+            {rulesText && (
+              <a className="btn-ghost" href={`/league/${league.id}/rules`}>
+                View rules page
+              </a>
+            )}
+          </div>
+          {rulesMsg && (
+            <p className={`mt-3 text-sm ${rulesMsg.error ? "text-loss" : "text-win"}`}>
+              {rulesMsg.text}
+            </p>
+          )}
+        </section>
+      </div>
+      {/* ===== END RULES TAB ===== */}
 
       {/* ===== SETTINGS TAB ===== */}
       <div className={`flex-col gap-8 ${tab === "settings" ? "flex" : "hidden"}`}>
