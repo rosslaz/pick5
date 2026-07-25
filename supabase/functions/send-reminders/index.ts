@@ -2,27 +2,17 @@
 // upcoming kickoff and a per-league lead time. See pick5-email-reminders-
 // decision.md for the provider decision.
 //
-// Two reminder types:
-//   * "slate"     — the Sunday 1:00 PM ET mass lock. One per person per week.
-//   * a kickoff   — games that lock before (or after) the slate. Reminders are
-//                   grouped BY KICKOFF TIME, not per game, and sent only to
-//                   players who could still pick one of them (fewer than 5
-//                   picks AND haven't already picked it).
+// LOCK RULE: the league freezes every remaining pick when the Sunday 1:00 ET
+// games start. Games kicking off BEFORE that lock at their own kickoff; the
+// 1:00 slate, the 4:25 window, Sunday night and Monday night all lock together
+// at 1:00. So reminders are only ever sent for:
+//   * the Sunday 1:00 anchor itself ("everything locks now"), and
+//   * individual kickoffs earlier in the week (Thu/Fri/Sat/Sun morning).
+// A game after the anchor never gets its own reminder — it is already locked.
 //
+// Reminders for games sharing a kickoff instant are grouped into one email.
 // A dedupe table (reminder_log) guarantees each (person, key) is emailed at
 // most once, so the hourly cron is safe to re-run.
-//
-// Release 5 fixes:
-//   #1  `hoursUntil(...) || leadHours` substituted the configured lead time
-//       whenever the real figure rounded to 0, so a reminder 20 minutes before
-//       kickoff announced "You have 3 hours". Time is now phrased honestly,
-//       including sub-hour cases.
-//   #2  Every game in the window produced its own email. The Sunday 1:00 slate
-//       was protected by a shared dedupe key, but the 4:25 window was not — a
-//       player short of picks got one email per game, several at once, and it
-//       burned the daily budget. Games sharing a kickoff are now one email.
-//   #6  The member query lost its ordering, so the "commissioner" used as
-//       reply-to was whichever admin Postgres happened to return first.
 //
 // Entry modes:
 //   * Scheduled: pg_cron calls hourly with an x-reminder-secret header;
@@ -187,11 +177,26 @@ function isSlateAnchor(kickoff: Date): boolean {
 }
 
 /**
- * Fix #1: never claim more time than there is. The old code did
- * `hoursUntil(...) || leadHours`, so anything under ~30 minutes rounded to 0
- * and fell back to the configured lead time — telling someone they had three
- * hours when the game kicked off in twenty minutes.
+ * The week's freeze point: the earliest Sunday 1:00 PM ET kickoff, or null if
+ * the week has none (then each game locks at its own kickoff). Mirrors the
+ * database's week_lock_anchor().
  */
+// deno-lint-ignore no-explicit-any
+async function weekLockAnchor(service: any, season: number, week: number): Promise<Date | null> {
+  const { data } = await service
+    .from("games")
+    .select("kickoff")
+    .eq("season", season)
+    .eq("week", week)
+    .order("kickoff", { ascending: true });
+  for (const g of data ?? []) {
+    const d = new Date(g.kickoff);
+    if (isSlateAnchor(d)) return d;
+  }
+  return null;
+}
+
+/** Never claim more time than there is (a 20-minute warning is not "3 hours"). */
 function timePhrase(msRemaining: number): string {
   const mins = Math.max(0, Math.round(msRemaining / 60000));
   if (mins < 5) return "just minutes";
@@ -266,21 +271,31 @@ async function processLeague(
   let skipped = 0;
   const errors: string[] = [];
   const notes: string[] = [];
+  const anchorByWeek = new Map<number, Date | null>();
 
   for (const groupKey of groupKeys) {
     const groupGames = groups.get(groupKey)!;
     const kickoff = new Date(groupKey);
+    const week = groupGames[0].week;
+    const slate = isSlateAnchor(kickoff);
+
+    if (!anchorByWeek.has(week)) {
+      anchorByWeek.set(week, await weekLockAnchor(service, league.season, week));
+    }
+    const anchor = anchorByWeek.get(week)!;
+
+    // Everything locks at the Sunday 1:00 anchor, so a later kickoff (4:25,
+    // Sunday night, Monday night) is ALREADY locked and must never generate a
+    // reminder of its own. The slate reminder is the last call for the week.
+    if (!slate && anchor && kickoff.getTime() > anchor.getTime()) continue;
+
     const msLeft = kickoff.getTime() - now;
-    // A test preview is months out; show the configured lead time instead of a
-    // literal (and absurd) distance.
     const phrase = opts.force
       ? league.leadHours === 1
         ? "1 hour"
         : `${league.leadHours} hours`
       : timePhrase(msLeft);
     const shortPhrase = opts.force ? `${league.leadHours}h` : timePhraseShort(msLeft);
-    const slate = isSlateAnchor(kickoff);
-    const week = groupGames[0].week;
 
     const { data: picks } = await service
       .from("picks")

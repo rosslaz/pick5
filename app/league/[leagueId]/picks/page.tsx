@@ -61,11 +61,22 @@ export default async function PicksPage({
     .eq("week", week)
     .returns<Pick<PickRow, "game_id" | "picked_home" | "pick_order">[]>();
 
+  // The weekly freeze: everything locks when the Sunday 1:00 ET games start,
+  // so a pick's real deadline is the earlier of its own kickoff and this.
+  // Null means the week has no Sunday 1:00 slate and each game locks at its
+  // own kickoff.
+  const { data: lockAnchor } = await supabase.rpc("week_lock_anchor", {
+    p_season: league.season,
+    p_week: week,
+  });
+
   return (
     <main>
       <div className="mb-3 flex items-baseline justify-between">
         <h1 className="text-3xl">Week {week} picks</h1>
-        <span className="text-sm text-muted">Picks lock at each game&apos;s kickoff</span>
+        <span className="text-sm text-muted">
+          Early games lock at kickoff · everything else locks Sun 1:00 ET
+        </span>
       </div>
       <WeekPicker
         basePath={`/league/${league.id}/picks`}
@@ -84,6 +95,7 @@ export default async function PicksPage({
           week={week}
           games={games}
           initialPicks={picks ?? []}
+          lockAnchor={(lockAnchor as string | null) ?? null}
         />
       )}
     </main>

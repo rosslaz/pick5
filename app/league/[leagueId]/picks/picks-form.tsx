@@ -18,12 +18,15 @@ export function PicksForm({
   week,
   games,
   initialPicks,
+  lockAnchor,
 }: {
   leagueId: string;
   season: number;
   week: number;
   games: Game[];
   initialPicks: { game_id: string; picked_home: boolean; pick_order: number }[];
+  /** ISO time of the week's Sunday 1:00 ET freeze, or null if the week has none. */
+  lockAnchor: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -50,10 +53,27 @@ export function PicksForm({
   }, []);
 
   const gameById = useMemo(() => new Map(games.map((g) => [g.id, g])), [games]);
+
+  // The league freezes every remaining pick when the Sunday 1:00 ET games
+  // start, so a pick's deadline is the EARLIER of its own kickoff and that
+  // anchor. Games after the anchor (4:25, Sunday night, Monday night) are
+  // pickable all week and then lock together at 1:00 — they were previously
+  // editable right up to their own kickoff, which was wrong.
+  const anchorMs = useMemo(
+    () => (lockAnchor ? new Date(lockAnchor).getTime() : null),
+    [lockAnchor]
+  );
+  const lockTimeOf = (g: Game) => {
+    const kick = new Date(g.kickoff).getTime();
+    return anchorMs === null ? kick : Math.min(kick, anchorMs);
+  };
   const isLocked = (gameId: string) => {
     const g = gameById.get(gameId);
-    return !g || new Date(g.kickoff).getTime() <= now;
+    return !g || lockTimeOf(g) <= now;
   };
+  /** Locked by the weekly freeze rather than by its own kickoff. */
+  const frozenNotStarted = (g: Game) =>
+    isLocked(g.id) && new Date(g.kickoff).getTime() > now;
   const slotLocked = (i: number) => slots[i] !== null && isLocked(slots[i]!.gameId);
   const slotOf = (gameId: string) => slots.findIndex((s) => s?.gameId === gameId);
   const used = slots.filter(Boolean).length;
@@ -193,7 +213,8 @@ export function PicksForm({
                   {game.status === "in_progress" && (
                     <span className="pulse-live font-semibold text-win">LIVE</span>
                   )}
-                  {game.status === "scheduled" && locked && "Kicked off"}
+                  {game.status === "scheduled" && frozenNotStarted(game) && "Locked"}
+                  {game.status === "scheduled" && locked && !frozenNotStarted(game) && "Kicked off"}
                   {game.status === "scheduled" && !locked && "\u00A0"}
                 </span>
               </div>
