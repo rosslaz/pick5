@@ -7,7 +7,7 @@ const IDLE_STALE_MS = 6 * 60 * 60 * 1000; // otherwise: every 6 hours (kickoff c
 
 export async function invokeSync(
   accessToken: string,
-  body: { season: number; week?: number; full?: boolean }
+  body: { season: number; leagueId: string; week?: number; full?: boolean }
 ) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-games`, {
     method: "POST",
@@ -16,7 +16,12 @@ export async function invokeSync(
       apikey: SUPABASE_ANON_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      season: body.season,
+      week: body.week,
+      full: body.full,
+      league_id: body.leagueId,
+    }),
     cache: "no-store",
   });
   if (!res.ok) {
@@ -52,7 +57,11 @@ export async function invokeReminderTest(accessToken: string, leagueId: string) 
  * Keeps the games table fresh without a paid cron: any page load checks staleness
  * and triggers the edge function (which pulls from ESPN) when needed.
  */
-export async function ensureGamesSynced(supabase: SupabaseClient, season: number) {
+export async function ensureGamesSynced(
+  supabase: SupabaseClient,
+  leagueId: string,
+  season: number
+) {
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
@@ -85,7 +94,7 @@ export async function ensureGamesSynced(supabase: SupabaseClient, season: number
     );
 
     if (liveStale || idleStale) {
-      await invokeSync(token, { season, week });
+      await invokeSync(token, { season, leagueId, week });
     }
   } catch (err) {
     // Never take the page down because ESPN hiccupped.

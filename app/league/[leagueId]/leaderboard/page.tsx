@@ -31,7 +31,7 @@ export default async function LeaderboardPage({
     .maybeSingle<League>();
   if (!league) redirect("/");
 
-  await ensureGamesSynced(supabase, league.season);
+  await ensureGamesSynced(supabase, league.id, league.season);
 
   // Roster via function: display names for everyone, emails only for admins
   // (fix #11 — the profiles embed exposed every member's address).
@@ -57,11 +57,16 @@ export default async function LeaderboardPage({
     profiles: { display_name: m.display_name, email: m.email ?? "" },
   }));
 
-  const { data: weekMeta } = await supabase
+  // One season-wide games read, reused for both the week picker and the
+  // week-completion map used by the movement arrows (fix #16 — this was two
+  // separate full-table reads per render).
+  const { data: seasonGames } = await supabase
     .from("games")
     .select("week, status, kickoff")
-    .eq("season", league.season);
-  const currentWeek = latestActiveWeek(weekMeta ?? []);
+    .eq("season", league.season)
+    .returns<{ week: number; status: string; kickoff: string }[]>();
+  const allGames = seasonGames ?? [];
+  const currentWeek = latestActiveWeek(allGames);
 
   const requested = Number(searchParams.week);
   const week =
@@ -168,11 +173,7 @@ export default async function LeaderboardPage({
   // Movement arrow: compare each player's current overall rank to their rank
   // as of the previous completed week. Only meaningful once 2+ weeks are done.
   const weekDone = new Map<number, boolean>();
-  for (const g of (await supabase
-    .from("games")
-    .select("week, status")
-    .eq("season", league.season)
-    .returns<{ week: number; status: string }[]>()).data ?? []) {
+  for (const g of allGames) {
     weekDone.set(g.week, (weekDone.get(g.week) ?? true) && g.status === "final");
   }
   const lastCompleted = Math.max(

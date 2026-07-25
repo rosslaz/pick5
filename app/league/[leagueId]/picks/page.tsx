@@ -30,7 +30,7 @@ export default async function PicksPage({
     .maybeSingle<League>();
   if (!league) redirect("/");
 
-  await ensureGamesSynced(supabase, league.season);
+  await ensureGamesSynced(supabase, league.id, league.season);
 
   const { data: allWeeks } = await supabase
     .from("games")

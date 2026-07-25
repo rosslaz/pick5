@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { invokeSync, invokeReminderTest } from "@/lib/sync";
@@ -119,15 +119,25 @@ export function AdminClient({
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
       if (!token) throw new Error("Session expired — sign in again.");
-      const result = await invokeSync(token, body);
+      const result = await invokeSync(token, { ...body, leagueId: league.id });
       const n = (result?.upserted as number) ?? 0;
       const pinned = (result?.pinned as number) ?? 0;
-      setSyncMsg(
-        (body.full
-          ? `Synced the full ${league.season} schedule (${n} games).`
-          : `Synced week ${body.week} (${n} games).`) +
-          (pinned > 0 ? ` Skipped ${pinned} pinned game${pinned > 1 ? "s" : ""}.` : "")
-      );
+      const failed = (result?.failed_weeks as number[]) ?? [];
+      // A partial sync must not read as a clean one (fix #9).
+      if (failed.length > 0) {
+        setErr(
+          `Synced ${n} game${n === 1 ? "" : "s"}, but ESPN did not answer for week${
+            failed.length > 1 ? "s" : ""
+          } ${failed.join(", ")}. Try those again in a minute.`
+        );
+      } else {
+        setSyncMsg(
+          (body.full
+            ? `Synced the full ${league.season} schedule (${n} games).`
+            : `Synced week ${body.week} (${n} games).`) +
+            (pinned > 0 ? ` Skipped ${pinned} pinned game${pinned > 1 ? "s" : ""}.` : "")
+        );
+      }
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Sync failed.");
@@ -752,6 +762,16 @@ function ScoreRow({
   const [home, setHome] = useState(game.home_score ?? 0);
   const [away, setAway] = useState(game.away_score ?? 0);
   const [pending, startTransition] = useTransition();
+
+  // Fix #6: these inputs seeded their state once at mount and the row keeps its
+  // key across refreshes, so after an ESPN sync brought new scores the boxes
+  // still showed the values from first render — and "Save final" would write
+  // those stale numbers back over the correct ones. Re-sync whenever the
+  // underlying game row actually changes.
+  useEffect(() => {
+    setHome(game.home_score ?? 0);
+    setAway(game.away_score ?? 0);
+  }, [game.updated_at, game.home_score, game.away_score]);
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-line bg-pitch px-3 py-2">
