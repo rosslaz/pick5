@@ -16,15 +16,34 @@ export default function AcceptRulesPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fix #18: this used a bare .then() with no rejection handling. A network
+  // failure or an RPC error left `loading` true forever, which permanently
+  // disabled the Accept button with no explanation — locking the player out
+  // of the league with a spinner.
   useEffect(() => {
-    const supabase = createClient();
-    supabase
-      .rpc("get_league_rules", { p_league_id: params.leagueId })
-      .then(({ data }) => {
-        const row = (data as { rules_text: string | null }[] | null)?.[0];
-        setRules(row?.rules_text ?? null);
-        setLoading(false);
-      });
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.rpc("get_league_rules", {
+          p_league_id: params.leagueId,
+        });
+        if (cancelled) return;
+        if (error) {
+          setError("Couldn't load the rules. Refresh to try again.");
+        } else {
+          const row = (data as { rules_text: string | null }[] | null)?.[0];
+          setRules(row?.rules_text ?? null);
+        }
+      } catch {
+        if (!cancelled) setError("Couldn't load the rules. Refresh to try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [params.leagueId]);
 
   async function accept() {

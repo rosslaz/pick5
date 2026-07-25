@@ -165,6 +165,10 @@ export function AdminClient({
       if (res.error) {
         setReminders(!next); // roll back
         setReminderMsg({ text: res.error, error: true });
+      } else {
+        // Fix #14: without this the server props stayed stale until the next
+        // navigation, so a later render could snap the toggle back.
+        router.refresh();
       }
     });
   }
@@ -183,6 +187,7 @@ export function AdminClient({
           ? { text: res.error, error: true }
           : { text: `Lead time saved: reminders go out ${n} hour${n === 1 ? "" : "s"} before kickoff.`, error: false }
       );
+      if (!res.error) router.refresh(); // fix #14
     });
   }
 

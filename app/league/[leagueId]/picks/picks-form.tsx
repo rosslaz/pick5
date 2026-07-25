@@ -77,19 +77,30 @@ export function PicksForm({
   function pickTeam(game: Game, home: boolean) {
     setMessage(null);
     if (isLocked(game.id)) return;
+
+    // Fix #12: the "slots are full" branch used to call setMessage from inside
+    // the setSlots updater. Updaters must be pure — React double-invokes them
+    // in StrictMode, firing the side effect twice. Decide against the current
+    // render's state first, then issue a pure update.
+    const existing = slots.findIndex((s) => s?.gameId === game.id);
+    if (existing >= 0) {
+      setSlots((prev) => {
+        const next = [...prev];
+        // Same team again removes it; the other team flips the pick.
+        next[existing] =
+          next[existing]!.pickedHome === home ? null : { gameId: game.id, pickedHome: home };
+        return next;
+      });
+      return;
+    }
+
+    const empty = slots.findIndex((s) => s === null);
+    if (empty < 0) {
+      setMessage({ text: "All 5 slots are full — remove a pick first.", error: true });
+      return;
+    }
     setSlots((prev) => {
       const next = [...prev];
-      const idx = next.findIndex((s) => s?.gameId === game.id);
-      if (idx >= 0) {
-        // Same team again removes it; the other team flips the pick.
-        next[idx] = next[idx]!.pickedHome === home ? null : { gameId: game.id, pickedHome: home };
-        return next;
-      }
-      const empty = next.findIndex((s) => s === null);
-      if (empty < 0) {
-        setMessage({ text: "All 5 slots are full — remove a pick first.", error: true });
-        return prev;
-      }
       next[empty] = { gameId: game.id, pickedHome: home };
       return next;
     });
@@ -135,31 +146,37 @@ export function PicksForm({
 
   return (
     <div>
-      {savedCount > 0 && (
-        <div
-          className={`mb-4 flex flex-wrap items-center gap-x-2 rounded-lg border px-4 py-3 text-sm ${
-            savedCount === PICKS_PER_WEEK && !dirty
-              ? "border-win/40 bg-win/10 text-win"
-              : "border-amber/40 bg-amber/10 text-ink"
-          }`}
-        >
-          {savedCount === PICKS_PER_WEEK && !dirty ? (
-            <span className="font-semibold">
-              ✓ You&apos;re locked in for Week {week} — all {PICKS_PER_WEEK} picks saved.
-            </span>
-          ) : dirty ? (
-            <span>
-              <b>Unsaved changes.</b> {savedCount} of {PICKS_PER_WEEK} picks are currently saved —
-              hit Save picks to update.
-            </span>
-          ) : (
-            <span>
-              <b>{savedCount} of {PICKS_PER_WEEK} picks saved.</b> Add {PICKS_PER_WEEK - savedCount}{" "}
-              more and save to lock in your week.
-            </span>
-          )}
-        </div>
-      )}
+      {/* Fix #13: this block was hidden entirely when nothing was saved yet,
+          so the player who most needs the nudge — the one with zero picks in —
+          saw no status at all. */}
+      <div
+        className={`mb-4 flex flex-wrap items-center gap-x-2 rounded-lg border px-4 py-3 text-sm ${
+          savedCount === PICKS_PER_WEEK && !dirty
+            ? "border-win/40 bg-win/10 text-win"
+            : "border-amber/40 bg-amber/10 text-ink"
+        }`}
+      >
+        {savedCount === PICKS_PER_WEEK && !dirty ? (
+          <span className="font-semibold">
+            ✓ You&apos;re locked in for Week {week} — all {PICKS_PER_WEEK} picks saved.
+          </span>
+        ) : dirty ? (
+          <span>
+            <b>Unsaved changes.</b> {savedCount} of {PICKS_PER_WEEK} picks are currently saved —
+            hit Save picks to update.
+          </span>
+        ) : savedCount === 0 ? (
+          <span>
+            <b>No picks saved yet for Week {week}.</b> Tap teams below to build your five, then
+            hit Save picks.
+          </span>
+        ) : (
+          <span>
+            <b>{savedCount} of {PICKS_PER_WEEK} picks saved.</b> Add {PICKS_PER_WEEK - savedCount}{" "}
+            more and save to lock in your week.
+          </span>
+        )}
+      </div>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-3">
         {games.map((game) => {

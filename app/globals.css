@@ -2,43 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-pitch text-ink font-body antialiased;
-  background-image: radial-gradient(1100px 500px at 50% -200px, rgba(201, 21, 30, 0.08), transparent 70%);
+/* Base element styling. Kept in @layer base so utility classes always win. */
+@layer base {
+  body {
+    @apply bg-pitch text-ink font-body antialiased;
+    background-image: radial-gradient(1100px 500px at 50% -200px, rgba(201, 21, 30, 0.08), transparent 70%);
+  }
+
+  h1, h2, h3 {
+    @apply font-display uppercase tracking-wide;
+  }
 }
 
-h1, h2, h3 {
-  @apply font-display uppercase tracking-wide;
-}
+/* Component classes MUST live in @layer components.
+ *
+ * Fix #5: these were previously declared after `@tailwind utilities`, so they
+ * beat utilities on source order at equal specificity. `.input` applies
+ * `w-full`, which meant every `className="input w-20"` silently rendered full
+ * width — the lead-time and score-override boxes stretched across their whole
+ * card. Inside @layer components, Tailwind emits them before the utilities
+ * layer, so `w-20`, `w-16`, `text-2xl` and friends override as intended. */
+@layer components {
+  .card {
+    @apply bg-surface border border-line rounded-xl;
+  }
 
-.card {
-  @apply bg-surface border border-line rounded-xl;
-}
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-display uppercase tracking-wider text-base font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-amber { @apply btn bg-amber text-white hover:bg-[#e01b25]; }
+  .btn-ghost { @apply btn border border-line text-ink hover:border-amber/60; }
+  .btn-danger { @apply btn border border-loss/40 text-loss hover:bg-loss/10; }
 
-.btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-display uppercase tracking-wider text-base font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
-}
-.btn-amber { @apply btn bg-amber text-white hover:bg-[#e01b25]; }
-.btn-ghost { @apply btn border border-line text-ink hover:border-amber/60; }
-.btn-danger { @apply btn border border-loss/40 text-loss hover:bg-loss/10; }
+  .input {
+    @apply w-full rounded-lg bg-pitch border border-line px-3 py-2 text-ink placeholder:text-muted/60 focus:outline-none focus:border-amber/70;
+  }
 
-.input {
-  @apply w-full rounded-lg bg-pitch border border-line px-3 py-2 text-ink placeholder:text-muted/60 focus:outline-none focus:border-amber/70;
+  /* stadium scoreboard cells — red LED digits on a dark board */
+  .score-cell {
+    font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    @apply inline-flex min-w-[2.6rem] items-center justify-center rounded-md px-1.5 py-0.5 text-lg font-bold;
+    background: #04101f;
+    border: 1px solid rgba(201, 21, 30, 0.35);
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.65);
+    color: #ff4a4a;
+    text-shadow: 0 0 8px rgba(201, 21, 30, 0.55);
+  }
+  .score-cell.dim { color: #5d6c85; text-shadow: none; border-color: rgba(126, 167, 216, 0.18); }
+  .score-cell.live { color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.5); border-color: rgba(74, 222, 128, 0.3); }
 }
-
-/* stadium scoreboard cells — red LED digits on a dark board */
-.score-cell {
-  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-  font-variant-numeric: tabular-nums;
-  @apply inline-flex min-w-[2.6rem] items-center justify-center rounded-md px-1.5 py-0.5 text-lg font-bold;
-  background: #04101f;
-  border: 1px solid rgba(201, 21, 30, 0.35);
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.65);
-  color: #ff4a4a;
-  text-shadow: 0 0 8px rgba(201, 21, 30, 0.55);
-}
-.score-cell.dim { color: #5d6c85; text-shadow: none; border-color: rgba(126, 167, 216, 0.18); }
-.score-cell.live { color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.5); border-color: rgba(74, 222, 128, 0.3); }
 
 @media (prefers-reduced-motion: no-preference) {
   .pulse-live { animation: pulse-live 1.6s ease-in-out infinite; }
