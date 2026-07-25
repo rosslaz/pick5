@@ -33,11 +33,29 @@ export default async function LeaderboardPage({
 
   await ensureGamesSynced(supabase, league.season);
 
-  const { data: members } = await supabase
-    .from("league_members")
-    .select("user_id, role, status, joined_at, profiles(display_name, email)")
-    .eq("league_id", league.id)
-    .returns<MemberRow[]>();
+  // Roster via function: display names for everyone, emails only for admins
+  // (fix #11 — the profiles embed exposed every member's address).
+  const { data: roster } = await supabase.rpc("get_league_roster", {
+    p_league_id: league.id,
+  });
+  const members: MemberRow[] = (
+    (roster as
+      | {
+          user_id: string;
+          display_name: string;
+          email: string | null;
+          role: string;
+          status: string;
+          joined_at: string;
+        }[]
+      | null) ?? []
+  ).map((m) => ({
+    user_id: m.user_id,
+    role: m.role as MemberRow["role"],
+    status: m.status as MemberRow["status"],
+    joined_at: m.joined_at,
+    profiles: { display_name: m.display_name, email: m.email ?? "" },
+  }));
 
   const { data: weekMeta } = await supabase
     .from("games")
@@ -75,14 +93,14 @@ export default async function LeaderboardPage({
     )
   );
 
-  // Half-season segment: if the commish set a "count from week N" marker, the
-  // overall standings (and movement) count only weeks >= N. Null = whole season.
-  const { data: lbSettings } = await supabase
-    .from("league_settings")
-    .select("score_from_week")
-    .eq("league_id", league.id)
-    .maybeSingle();
-  const scoreFromWeek: number | null = lbSettings?.score_from_week ?? null;
+  // Half-season segment: read through a member-visible function. Reading
+  // league_settings directly returned zero rows for non-admins (admin-only
+  // RLS), so players silently saw full-season standings while the commissioner
+  // saw the windowed ones (fix #2).
+  const { data: windowWeek } = await supabase.rpc("get_scoring_window", {
+    p_league_id: league.id,
+  });
+  const scoreFromWeek: number | null = (windowWeek as number | null) ?? null;
 
   // Season totals aggregated in the database (scales past the row cap and
   // respects the Sunday-slate reveal rule).
@@ -105,7 +123,7 @@ export default async function LeaderboardPage({
     ])
   );
 
-  const memberList = members ?? [];
+  const memberList = members;
   const weekly = buildWeeklyBoard(memberList, weekPicks ?? [], user.id, submittedSlots);
 
   // Perfect-slate jackpot: flag anyone who nailed the 5 highest-scoring winning

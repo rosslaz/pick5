@@ -60,7 +60,10 @@ export async function setScore(
   status: "scheduled" | "in_progress" | "final"
 ): Promise<{ error?: string }> {
   const supabase = await client();
+  // Overrides are global (games are shared), so the database restricts this to
+  // the app-owner allowlist and records every change. See migration 0022.
   const { error } = await supabase.rpc("admin_set_score", {
+    p_league_id: leagueId,
     p_game_id: gameId,
     p_home_score: homeScore,
     p_away_score: awayScore,
@@ -184,6 +187,7 @@ export async function releaseOverride(
 ): Promise<{ error?: string }> {
   const supabase = await client();
   const { error } = await supabase.rpc("admin_release_override", {
+    p_league_id: leagueId,
     p_game_id: gameId,
   });
   if (error) return { error: error.message };

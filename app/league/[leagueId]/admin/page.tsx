@@ -27,21 +27,42 @@ export default async function AdminPage({
     .maybeSingle<League>();
   if (!league) redirect("/");
 
-  // Confirm the viewer is actually an admin of this league.
+  // Confirm the viewer is actually an ACTIVE admin of this league. Without the
+  // status check a removed member who still carries role='admin' could reach
+  // this page if the leagues RLS ever loosened (fix #7).
   const { data: me } = await supabase
     .from("league_members")
-    .select("role")
+    .select("role, status")
     .eq("league_id", league.id)
     .eq("user_id", user.id)
-    .maybeSingle<{ role: string }>();
-  if (me?.role !== "admin") redirect(`/league/${league.id}/picks`);
+    .maybeSingle<{ role: string; status: string }>();
+  if (me?.role !== "admin" || me?.status !== "active") {
+    redirect(`/league/${league.id}/picks`);
+  }
 
-  const { data: members } = await supabase
-    .from("league_members")
-    .select("user_id, role, status, joined_at, profiles(display_name, email)")
-    .eq("league_id", league.id)
-    .order("joined_at", { ascending: true })
-    .returns<MemberRow[]>();
+  // Roster comes from a function so member emails aren't exposed through the
+  // profiles table to non-admins (fix #11).
+  const { data: roster } = await supabase.rpc("get_league_roster", {
+    p_league_id: league.id,
+  });
+  const members: MemberRow[] = (
+    (roster as
+      | {
+          user_id: string;
+          display_name: string;
+          email: string | null;
+          role: string;
+          status: string;
+          joined_at: string;
+        }[]
+      | null) ?? []
+  ).map((m) => ({
+    user_id: m.user_id,
+    role: m.role as MemberRow["role"],
+    status: m.status as MemberRow["status"],
+    joined_at: m.joined_at,
+    profiles: { display_name: m.display_name, email: m.email ?? "" },
+  }));
 
   const { data: weekMeta } = await supabase
     .from("games")
@@ -82,7 +103,7 @@ export default async function AdminPage({
   return (
     <AdminClient
       league={league}
-      members={members ?? []}
+      members={members}
       currentUserId={user.id}
       week={week}
       currentWeek={currentWeek}
