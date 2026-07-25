@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ensureGamesSynced } from "@/lib/sync";
-import { computeCurrentWeek } from "@/lib/weeks";
 import { TOTAL_WEEKS } from "@/lib/config";
 import { WeekPicker } from "@/components/week-picker";
 import { PicksForm } from "./picks-form";
@@ -32,11 +31,15 @@ export default async function PicksPage({
 
   await ensureGamesSynced(supabase, league.id, league.season);
 
-  const { data: allWeeks } = await supabase
-    .from("games")
-    .select("week, status, kickoff")
-    .eq("season", league.season);
-  const currentWeek = computeCurrentWeek(allWeeks ?? []);
+  // Which week should a player actually be picking? Not the same question as
+  // "which week has unfinished games" (that one drives the ESPN re-sync). Once
+  // the Sunday 1:00 freeze passes, the current week still has games left to
+  // play but nothing can be picked in it, so this points at the next week that
+  // is genuinely open.
+  const { data: pickWeek } = await supabase.rpc("current_pick_week", {
+    p_season: league.season,
+  });
+  const currentWeek = (pickWeek as number | null) ?? 1;
 
   const requested = Number(searchParams.week);
   const week =

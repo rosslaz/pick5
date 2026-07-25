@@ -74,6 +74,8 @@ export function PicksForm({
   /** Locked by the weekly freeze rather than by its own kickoff. */
   const frozenNotStarted = (g: Game) =>
     isLocked(g.id) && new Date(g.kickoff).getTime() > now;
+  /** Nothing in this week can be changed any more. */
+  const weekLocked = games.length > 0 && games.every((g) => isLocked(g.id));
   const slotLocked = (i: number) => slots[i] !== null && isLocked(slots[i]!.gameId);
   const slotOf = (gameId: string) => slots.findIndex((s) => s?.gameId === gameId);
   const used = slots.filter(Boolean).length;
@@ -169,12 +171,19 @@ export function PicksForm({
           saw no status at all. */}
       <div
         className={`mb-4 flex flex-wrap items-center gap-x-2 rounded-lg border px-4 py-3 text-sm ${
-          savedCount === PICKS_PER_WEEK && !dirty
+          weekLocked
+            ? "border-line bg-raised/40 text-muted"
+            : savedCount === PICKS_PER_WEEK && !dirty
             ? "border-win/40 bg-win/10 text-win"
             : "border-amber/40 bg-amber/10 text-ink"
         }`}
       >
-        {savedCount === PICKS_PER_WEEK && !dirty ? (
+        {weekLocked ? (
+          <span>
+            <b>Week {week} is locked.</b> You finished with {savedCount} of {PICKS_PER_WEEK}{" "}
+            {savedCount === 1 ? "pick" : "picks"} in.
+          </span>
+        ) : savedCount === PICKS_PER_WEEK && !dirty ? (
           <span className="font-semibold">
             ✓ You&apos;re locked in for Week {week} — all {PICKS_PER_WEEK} picks saved.
           </span>
@@ -316,10 +325,10 @@ export function PicksForm({
           <button
             className="btn-amber mt-4 w-full"
             onClick={save}
-            disabled={pending || !dirty}
+            disabled={pending || !dirty || weekLocked}
             type="button"
           >
-            {pending ? "Saving…" : "Save picks"}
+            {pending ? "Saving…" : weekLocked ? "Locked" : "Save picks"}
           </button>
           {message && (
             <p className={`mt-2 text-sm ${message.error ? "text-loss" : "text-win"}`}>

@@ -158,6 +158,13 @@ select pg_temp.expect('setup','week 5 anchor resolves to a Sunday 1:00 PM ET','S
 select pg_temp.expect('setup','week 3 left incomplete by a postponed game','1 unfinished',
  (select count(*) filter (where status<>'final') from public.games where season=9999 and week=3)::text||' unfinished');
 
+-- Regression guard: weeks 1-4 are all past their lock (week 4's anchor has
+-- passed even though a later game has not kicked off), so the Picks page must
+-- point at week 5 -- the first week still open. Before 0032 this returned the
+-- locked week for ~34 hours every Sunday/Monday.
+select pg_temp.expect('setup','picks page defaults to the first OPEN week','5',
+ public.current_pick_week(9999)::text);
+
 -- ================================================================= SCORING
 select pg_temp.expect('scoring','Ada week 1 total, five correct picks','153',
  (select total::text from public.get_overall_totals('7e57de51-0000-0000-0000-00000000000a',9999,1) where user_id=pg_temp.uid(1)));
