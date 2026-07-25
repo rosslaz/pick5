@@ -3,16 +3,26 @@
 // decision.md for the provider decision.
 //
 // Two reminder types:
-//   * "slate"     — the Sunday 1:00 PM ET mass lock. One per person per week:
-//                   "you have X hours before all your picks lock."
-//   * a game id   — a standalone game that locks before (or after) the slate:
-//                   "you have X hours to get your pick in for AWAY vs HOME."
-//                   Only sent to players who could still pick that game
-//                   (fewer than 5 picks AND haven't already picked it).
+//   * "slate"     — the Sunday 1:00 PM ET mass lock. One per person per week.
+//   * a kickoff   — games that lock before (or after) the slate. Reminders are
+//                   grouped BY KICKOFF TIME, not per game, and sent only to
+//                   players who could still pick one of them (fewer than 5
+//                   picks AND haven't already picked it).
 //
-// A run reminds about any kickoff falling within the league's lead-time
-// window. A dedupe table (reminder_log) guarantees each (person, key) is
-// emailed at most once, so the hourly cron is safe to re-run.
+// A dedupe table (reminder_log) guarantees each (person, key) is emailed at
+// most once, so the hourly cron is safe to re-run.
+//
+// Release 5 fixes:
+//   #1  `hoursUntil(...) || leadHours` substituted the configured lead time
+//       whenever the real figure rounded to 0, so a reminder 20 minutes before
+//       kickoff announced "You have 3 hours". Time is now phrased honestly,
+//       including sub-hour cases.
+//   #2  Every game in the window produced its own email. The Sunday 1:00 slate
+//       was protected by a shared dedupe key, but the 4:25 window was not — a
+//       player short of picks got one email per game, several at once, and it
+//       burned the daily budget. Games sharing a kickoff are now one email.
+//   #6  The member query lost its ordering, so the "commissioner" used as
+//       reply-to was whichever admin Postgres happened to return first.
 //
 // Entry modes:
 //   * Scheduled: pg_cron calls hourly with an x-reminder-secret header;
@@ -95,7 +105,6 @@ Deno.serve(async (req) => {
         leadHours: l.league_settings?.reminder_lead_hours ?? 3,
       }));
     } else {
-      // Admin-triggered test for one league.
       const auth = req.headers.get("Authorization") ?? "";
       const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: auth } },
@@ -177,8 +186,25 @@ function isSlateAnchor(kickoff: Date): boolean {
   return wd === "Sun" && hr === SLATE_HOUR_ET;
 }
 
-function hoursUntil(kickoff: Date, now: number): number {
-  return Math.max(0, Math.round((kickoff.getTime() - now) / (60 * 60 * 1000)));
+/**
+ * Fix #1: never claim more time than there is. The old code did
+ * `hoursUntil(...) || leadHours`, so anything under ~30 minutes rounded to 0
+ * and fell back to the configured lead time — telling someone they had three
+ * hours when the game kicked off in twenty minutes.
+ */
+function timePhrase(msRemaining: number): string {
+  const mins = Math.max(0, Math.round(msRemaining / 60000));
+  if (mins < 5) return "just minutes";
+  if (mins < 60) return `${mins} minutes`;
+  const hrs = Math.round(mins / 60);
+  return hrs === 1 ? "1 hour" : `${hrs} hours`;
+}
+
+/** Short form for subject lines. */
+function timePhraseShort(msRemaining: number): string {
+  const mins = Math.max(0, Math.round(msRemaining / 60000));
+  if (mins < 60) return `${mins}m`;
+  return `${Math.round(mins / 60)}h`;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -191,9 +217,6 @@ async function processLeague(
   const now = Date.now();
   const windowMs = league.leadHours * 60 * 60 * 1000;
 
-  // Real run: only kickoffs inside the lead-time window are due. Test run: no
-  // horizon at all — grab the single next upcoming game in the season so a
-  // preview always works, even in the offseason when Week 1 is months away.
   let query = service
     .from("games")
     .select("id, week, kickoff, away_abbr, home_abbr, away_team, home_team")
@@ -218,14 +241,24 @@ async function processLeague(
     };
   }
 
-  // In a test, only act on the single earliest upcoming kickoff.
-  const targets = opts.force ? upcoming.slice(0, 1) : upcoming;
+  // Fix #2: group by kickoff instant so games starting together produce ONE
+  // email instead of one per game.
+  const groups = new Map<string, GameRow[]>();
+  for (const g of upcoming) {
+    const key = new Date(g.kickoff).toISOString();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(g);
+  }
+  const groupKeys = [...groups.keys()].sort();
 
+  // Fix #6: restore deterministic ordering so the commissioner used for
+  // reply-to is the earliest-joined active admin, as documented.
   const { data: members } = await service
     .from("league_members")
-    .select("user_id, role, profiles(display_name, email)")
+    .select("user_id, role, joined_at, profiles(display_name, email)")
     .eq("league_id", league.id)
-    .eq("status", "active");
+    .eq("status", "active")
+    .order("joined_at", { ascending: true });
   // deno-lint-ignore no-explicit-any
   const activeMembers = (members ?? []).filter((m: any) => m.profiles?.email);
 
@@ -234,19 +267,27 @@ async function processLeague(
   const errors: string[] = [];
   const notes: string[] = [];
 
-  for (const game of targets) {
-    const kickoff = new Date(game.kickoff);
-    // Real run: true hours to kickoff. Test run: show the configured lead time
-    // so a months-out preview reads "3 hours", not "1400 hours".
-    const hrs = opts.force ? league.leadHours : hoursUntil(kickoff, now) || league.leadHours;
+  for (const groupKey of groupKeys) {
+    const groupGames = groups.get(groupKey)!;
+    const kickoff = new Date(groupKey);
+    const msLeft = kickoff.getTime() - now;
+    // A test preview is months out; show the configured lead time instead of a
+    // literal (and absurd) distance.
+    const phrase = opts.force
+      ? league.leadHours === 1
+        ? "1 hour"
+        : `${league.leadHours} hours`
+      : timePhrase(msLeft);
+    const shortPhrase = opts.force ? `${league.leadHours}h` : timePhraseShort(msLeft);
     const slate = isSlateAnchor(kickoff);
+    const week = groupGames[0].week;
 
     const { data: picks } = await service
       .from("picks")
       .select("user_id, game_id")
       .eq("league_id", league.id)
       .eq("season", league.season)
-      .eq("week", game.week);
+      .eq("week", week);
     const countByUser = new Map<string, number>();
     const pickedGameByUser = new Map<string, Set<string>>();
     for (const p of picks ?? []) {
@@ -255,7 +296,9 @@ async function processLeague(
       pickedGameByUser.get(p.user_id)!.add(p.game_id);
     }
 
-    const reminderKey = slate ? `slate:${league.season}:${game.week}` : game.id;
+    // One key per kickoff group (or per week for the slate), so a person is
+    // reminded once for that lock moment no matter how many games share it.
+    const reminderKey = slate ? `slate:${league.season}:${week}` : `kick:${groupKey}`;
 
     const { data: already } = await service
       .from("reminder_log")
@@ -265,32 +308,43 @@ async function processLeague(
     const remindedUsers = new Set((already ?? []).map((r: { user_id: string }) => r.user_id));
 
     // deno-lint-ignore no-explicit-any
-    const recipients = activeMembers.filter((m: any) => {
+    const recipients: { m: any; openGames: GameRow[] }[] = [];
+    for (const m of activeMembers) {
       const count = countByUser.get(m.user_id) ?? 0;
-      if (count >= PICKS_PER_WEEK) return false; // done for the week
-      if (slate) return true; // slate: anyone short of 5
-      const picked = pickedGameByUser.get(m.user_id);
-      return !picked || !picked.has(game.id); // standalone: game still pickable
-    });
+      if (count >= PICKS_PER_WEEK) continue; // done for the week
+      if (slate) {
+        recipients.push({ m, openGames: [] });
+        continue;
+      }
+      const picked = pickedGameByUser.get(m.user_id) ?? new Set<string>();
+      const openGames = groupGames.filter((g) => !picked.has(g.id));
+      if (openGames.length > 0) recipients.push({ m, openGames });
+    }
 
-    for (const m of recipients) {
+    for (const { m, openGames } of recipients) {
       if (opts.force) {
-        // Test: send one representative email to the caller, then stop.
-        const html = renderEmail(slate, m.profiles.display_name ?? "there", hrs, game, opts.appUrl);
+        const html = renderEmail(
+          slate,
+          m.profiles.display_name ?? "there",
+          phrase,
+          openGames,
+          week,
+          opts.appUrl
+        );
         const err = await sendEmail(
           opts,
           `${league.name} Reminders`,
           replyToFor(activeMembers),
           opts.callerEmail ?? m.profiles.email,
           m.profiles.display_name ?? null,
-          subjectFor(slate, hrs, game),
+          subjectFor(slate, shortPhrase, openGames, week),
           html
         );
         if (err) return { league: league.name, sent: 0, errors: [`${opts.callerEmail}: ${err}`] };
         return {
           league: league.name,
           sent: 1,
-          note: `Test sent a ${slate ? "Sunday-lock" : "standalone-game"} reminder to your email.`,
+          note: `Test sent a ${slate ? "Sunday-lock" : "kickoff"} reminder to your email.`,
         };
       }
 
@@ -299,14 +353,21 @@ async function processLeague(
         skipped++;
         continue;
       }
-      const html = renderEmail(slate, m.profiles.display_name ?? "there", hrs, game, opts.appUrl);
+      const html = renderEmail(
+        slate,
+        m.profiles.display_name ?? "there",
+        phrase,
+        openGames,
+        week,
+        opts.appUrl
+      );
       const err = await sendEmail(
         opts,
         `${league.name} Reminders`,
         replyToFor(activeMembers),
         m.profiles.email,
         m.profiles.display_name ?? null,
-        subjectFor(slate, hrs, game),
+        subjectFor(slate, shortPhrase, openGames, week),
         html
       );
       if (err) {
@@ -324,7 +385,7 @@ async function processLeague(
 
     if (!opts.force && recipients.length > 0) {
       notes.push(
-        `${slate ? "Sunday lock" : `${game.away_abbr}@${game.home_abbr}`}: ${recipients.length} eligible`
+        `${slate ? "Sunday lock" : `${groupGames.length} game(s) at ${groupKey}`}: ${recipients.length} eligible`
       );
     }
   }
@@ -348,43 +409,73 @@ async function processLeague(
 
 // deno-lint-ignore no-explicit-any
 function replyToFor(members: any[]): { email: string; name: string } | null {
+  // members arrive ordered by joined_at, so this is the earliest-joined admin.
   const commish = members.find((m) => m.role === "admin");
   return commish?.profiles?.email
     ? { email: commish.profiles.email, name: commish.profiles.display_name ?? "League admin" }
     : null;
 }
 
-function subjectFor(slate: boolean, hrs: number, game: GameRow): string {
-  return slate
-    ? `${hrs}h before your Week ${game.week} picks lock`
-    : `${hrs}h to pick ${game.away_abbr} @ ${game.home_abbr}`;
+function subjectFor(
+  slate: boolean,
+  shortPhrase: string,
+  openGames: GameRow[],
+  week: number
+): string {
+  if (slate) return `${shortPhrase} before your Week ${week} picks lock`;
+  if (openGames.length === 1) {
+    return `${shortPhrase} to pick ${openGames[0].away_abbr} @ ${openGames[0].home_abbr}`;
+  }
+  return `${shortPhrase} before ${openGames.length} games kick off`;
 }
 
 function renderEmail(
   slate: boolean,
   name: string,
-  hrs: number,
-  game: GameRow,
+  phrase: string,
+  openGames: GameRow[],
+  week: number,
   appUrl: string
 ): string {
   const cta = appUrl
     ? `<p><a href="${appUrl}" style="background:#C9151E;color:#ffffff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Get them in now →</a></p>`
     : "";
+
   if (slate) {
     return `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px">
         <h2 style="margin:0 0 8px">🏈 Picks lock soon</h2>
         <p>Hi ${esc(name)},</p>
-        <p>You have <b>${hrs} hours</b> before all of your picks are locked for the week. Get them in now!</p>
+        <p>You have <b>${phrase}</b> before all of your picks are locked for the week. Get them in now!</p>
         ${cta}
       </div>`;
   }
+
+  // Single game keeps the original wording.
+  if (openGames.length === 1) {
+    const g = openGames[0];
+    return `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px">
+        <h2 style="margin:0 0 8px">🏈 A game is about to lock</h2>
+        <p>Hi ${esc(name)},</p>
+        <p>You have <b>${phrase}</b> to get your pick in for tonight's game between
+        <b>${esc(g.away_team)}</b> and <b>${esc(g.home_team)}</b>.</p>
+        ${cta}
+      </div>`;
+  }
+
+  // Several games share this kickoff (e.g. the Sunday 4:25 window): one email
+  // listing what is still open, instead of one email per game.
+  const list = openGames
+    .map((g) => `<li>${esc(g.away_team)} at ${esc(g.home_team)}</li>`)
+    .join("");
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px">
-      <h2 style="margin:0 0 8px">🏈 A game is about to lock</h2>
+      <h2 style="margin:0 0 8px">🏈 Games about to lock</h2>
       <p>Hi ${esc(name)},</p>
-      <p>You have <b>${hrs} hours</b> to get your pick in for tonight's game between
-      <b>${esc(game.away_team)}</b> and <b>${esc(game.home_team)}</b>.</p>
+      <p>You have <b>${phrase}</b> to get your picks in — these games kick off at the same time
+      and you can still pick any of them:</p>
+      <ul>${list}</ul>
       ${cta}
     </div>`;
 }

@@ -35,6 +35,7 @@ export function AdminClient({
   auditRows,
   rulesText,
   rulesRequired,
+  overrideRows,
 }: {
   league: League;
   members: MemberRow[];
@@ -56,6 +57,18 @@ export function AdminClient({
   }[];
   rulesText: string;
   rulesRequired: boolean;
+  overrideRows: {
+    game_label: string;
+    week: number;
+    action: string;
+    old_home: number | null;
+    old_away: number | null;
+    new_home: number | null;
+    new_away: number | null;
+    new_status: string | null;
+    actor_name: string;
+    created_at: string;
+  }[];
 }) {
   const router = useRouter();
   const [code, setCode] = useState(league.invite_code);
@@ -682,6 +695,66 @@ export function AdminClient({
         </div>
       </section>
 
+      {/* Manual score override history (fix #3) */}
+      <section className="card p-5">
+        <h2 className="text-2xl">Score override history</h2>
+        <p className="mt-1 text-sm text-muted">
+          Every manual score correction for the {league.season} season, with who made it.
+          Overrides are global — they affect every league using that game — so they are
+          restricted to the app owner and recorded here.
+        </p>
+        {overrideRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No manual overrides have been made.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-muted">
+                  <th className="px-2 py-1 font-normal">When</th>
+                  <th className="px-2 py-1 font-normal">Game</th>
+                  <th className="px-2 py-1 font-normal">Change</th>
+                  <th className="px-2 py-1 font-normal">By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overrideRows.map((r, i) => (
+                  <tr key={i} className="border-b border-line/50">
+                    <td className="px-2 py-1 text-muted">
+                      {new Date(r.created_at).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="px-2 py-1">
+                      W{r.week} {r.game_label}
+                    </td>
+                    <td className="px-2 py-1">
+                      {r.action === "unpin" ? (
+                        <span className="text-muted">unpinned (handed back to ESPN)</span>
+                      ) : (
+                        <span>
+                          <span className="text-muted">
+                            {r.old_home ?? "–"}–{r.old_away ?? "–"}
+                          </span>{" "}
+                          →{" "}
+                          <b>
+                            {r.new_home}–{r.new_away}
+                          </b>{" "}
+                          <span className="text-muted">({r.new_status})</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1">{r.actor_name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {/* Pick audit log (lock-gated: only visible once the week is final) */}
       <section className="card p-5">
         <h2 className="text-2xl">Pick audit — week {week}</h2>
@@ -764,19 +837,24 @@ function ScoreRow({
   onUnpin: () => void;
 }) {
   const router = useRouter();
-  const [home, setHome] = useState(game.home_score ?? 0);
-  const [away, setAway] = useState(game.away_score ?? 0);
+  // Fix #8: keep these as strings. Number("") is 0, so clearing a box used to
+  // silently mean "zero" rather than "unset", and a stray save would write it.
+  const [home, setHome] = useState(String(game.home_score ?? 0));
+  const [away, setAway] = useState(String(game.away_score ?? 0));
+  const [touched, setTouched] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // Fix #6: these inputs seeded their state once at mount and the row keeps its
   // key across refreshes, so after an ESPN sync brought new scores the boxes
   // still showed the values from first render — and "Save final" would write
-  // those stale numbers back over the correct ones. Re-sync whenever the
-  // underlying game row actually changes.
+  // those stale numbers back over the correct ones.
+  // Fix #7: only adopt server values when the admin hasn't started editing, so
+  // a background refresh can't overwrite something half-typed.
   useEffect(() => {
-    setHome(game.home_score ?? 0);
-    setAway(game.away_score ?? 0);
-  }, [game.updated_at, game.home_score, game.away_score]);
+    if (touched) return;
+    setHome(String(game.home_score ?? 0));
+    setAway(String(game.away_score ?? 0));
+  }, [game.updated_at, game.home_score, game.away_score, touched]);
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-line bg-pitch px-3 py-2">
@@ -804,7 +882,10 @@ function ScoreRow({
           type="number"
           min={0}
           value={away}
-          onChange={(e) => setAway(Number(e.target.value))}
+          onChange={(e) => {
+            setTouched(true);
+            setAway(e.target.value);
+          }}
         />
         <span className="text-muted">–</span>
         <label className="sr-only" htmlFor={`home-${game.id}`}>
@@ -816,7 +897,10 @@ function ScoreRow({
           type="number"
           min={0}
           value={home}
-          onChange={(e) => setHome(Number(e.target.value))}
+          onChange={(e) => {
+            setTouched(true);
+            setHome(e.target.value);
+          }}
         />
         <button
           className="btn-amber px-3 py-1 text-sm"
@@ -824,10 +908,20 @@ function ScoreRow({
           type="button"
           onClick={() => {
             onError(null);
+            // Fix #8: reject blank/non-numeric rather than coercing to 0.
+            const h = Number(home);
+            const a = Number(away);
+            if (home.trim() === "" || away.trim() === "" || !Number.isFinite(h) || !Number.isFinite(a)) {
+              onError(`Enter both scores for ${game.away_abbr} @ ${game.home_abbr}.`);
+              return;
+            }
             startTransition(async () => {
-              const res = await setScore(leagueId, game.id, home, away, "final");
+              const res = await setScore(leagueId, game.id, h, a, "final");
               if (res.error) onError(res.error);
-              else router.refresh();
+              else {
+                setTouched(false);
+                router.refresh();
+              }
             });
           }}
         >

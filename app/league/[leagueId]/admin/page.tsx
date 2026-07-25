@@ -100,6 +100,13 @@ export default async function AdminPage({
     p_week: week,
   });
 
+  // Manual score overrides recorded for this season (fix #3 — the audit table
+  // existed but had no read path at all). Admin-only in the database.
+  const { data: overrides } = await supabase.rpc("get_score_overrides", {
+    p_league_id: league.id,
+    p_season: league.season,
+  });
+
   return (
     <AdminClient
       league={league}
@@ -114,6 +121,22 @@ export default async function AdminPage({
       scoreFromWeek={settings?.score_from_week ?? null}
       rulesText={settings?.rules_text ?? ""}
       rulesRequired={settings?.rules_required ?? false}
+      overrideRows={
+        (overrides as
+          | {
+              game_label: string;
+              week: number;
+              action: string;
+              old_home: number | null;
+              old_away: number | null;
+              new_home: number | null;
+              new_away: number | null;
+              new_status: string | null;
+              actor_name: string;
+              created_at: string;
+            }[]
+          | null) ?? []
+      }
       auditRows={
         (audit as
           | {

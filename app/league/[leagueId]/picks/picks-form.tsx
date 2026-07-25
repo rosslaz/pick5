@@ -78,29 +78,27 @@ export function PicksForm({
     setMessage(null);
     if (isLocked(game.id)) return;
 
-    // Fix #12: the "slots are full" branch used to call setMessage from inside
-    // the setSlots updater. Updaters must be pure — React double-invokes them
-    // in StrictMode, firing the side effect twice. Decide against the current
-    // render's state first, then issue a pure update.
-    const existing = slots.findIndex((s) => s?.gameId === game.id);
-    if (existing >= 0) {
-      setSlots((prev) => {
-        const next = [...prev];
-        // Same team again removes it; the other team flips the pick.
-        next[existing] =
-          next[existing]!.pickedHome === home ? null : { gameId: game.id, pickedHome: home };
-        return next;
-      });
-      return;
-    }
-
-    const empty = slots.findIndex((s) => s === null);
-    if (empty < 0) {
+    // The side effect (the "slots are full" message) is decided out here so the
+    // updater stays pure — React double-invokes updaters in StrictMode.
+    // Fix #5: the indices themselves are derived from `prev` INSIDE the
+    // updater. An earlier version captured them from render state, which could
+    // write to a stale slot if two picks landed before a re-render.
+    const alreadyPicked = slots.some((s) => s?.gameId === game.id);
+    if (!alreadyPicked && slots.every((s) => s !== null)) {
       setMessage({ text: "All 5 slots are full — remove a pick first.", error: true });
       return;
     }
+
     setSlots((prev) => {
       const next = [...prev];
+      const idx = next.findIndex((s) => s?.gameId === game.id);
+      if (idx >= 0) {
+        // Same team again removes it; the other team flips the pick.
+        next[idx] = next[idx]!.pickedHome === home ? null : { gameId: game.id, pickedHome: home };
+        return next;
+      }
+      const empty = next.findIndex((s) => s === null);
+      if (empty < 0) return prev; // pure no-op; the message was already shown
       next[empty] = { gameId: game.id, pickedHome: home };
       return next;
     });

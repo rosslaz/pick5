@@ -170,8 +170,11 @@ export default async function LeaderboardPage({
         : i + 1;
   });
 
-  // Movement arrow: compare each player's current overall rank to their rank
-  // as of the previous completed week. Only meaningful once 2+ weeks are done.
+  // Movement arrow: the change in overall rank caused by the last COMPLETED
+  // week. Fix #4: this previously compared the live standings (which include
+  // points from the in-progress week as games finish) against the standings
+  // two weeks back, so the arrow drifted mid-week and spanned more than the
+  // one week its tooltip claimed. Both sides are now settled snapshots.
   const weekDone = new Map<number, boolean>();
   for (const g of allGames) {
     weekDone.set(g.week, (weekDone.get(g.week) ?? true) && g.status === "final");
@@ -182,40 +185,55 @@ export default async function LeaderboardPage({
       .filter(([, done]) => done)
       .map(([w]) => w)
   );
-  // Within a half-season segment, movement is only meaningful once 2+ weeks
-  // *inside* the segment are complete, and the prior snapshot must not dip
-  // below the segment's start week.
   const segmentStart = scoreFromWeek ?? 1;
   const completedInSegment = lastCompleted - segmentStart + 1;
   if (completedInSegment >= 2) {
-    const { data: prior } = await supabase.rpc("get_overall_totals", {
-      p_league_id: league.id,
-      p_season: league.season,
-      p_through_week: lastCompleted - 1,
-      p_from_week: scoreFromWeek,
-    });
-    const priorMap = new Map<string, { total: number; weeks_won: number }>(
-      ((prior as { user_id: string; total: number; weeks_won: number }[] | null) ?? []).map((o) => [
-        o.user_id,
-        { total: o.total, weeks_won: o.weeks_won },
-      ])
-    );
-    const priorRanked = [...rows]
-      .map((r) => ({ userId: r.userId, ...(priorMap.get(r.userId) ?? { total: 0, weeks_won: 0 }) }))
-      .sort((a, b) => b.total - a.total || b.weeks_won - a.weeks_won);
-    const priorRank = new Map<string, number>();
-    priorRanked.forEach((r, i) => {
-      const prev = priorRanked[i - 1];
-      priorRank.set(
-        r.userId,
-        i > 0 && prev.total === r.total && prev.weeks_won === r.weeks_won
-          ? priorRank.get(prev.userId)!
-          : i + 1
+    const [priorRes, settledRes] = await Promise.all([
+      supabase.rpc("get_overall_totals", {
+        p_league_id: league.id,
+        p_season: league.season,
+        p_through_week: lastCompleted - 1,
+        p_from_week: scoreFromWeek,
+      }),
+      supabase.rpc("get_overall_totals", {
+        p_league_id: league.id,
+        p_season: league.season,
+        p_through_week: lastCompleted,
+        p_from_week: scoreFromWeek,
+      }),
+    ]);
+
+    type Totals = { user_id: string; total: number; weeks_won: number };
+    const ids = rows.map((r) => r.userId);
+    const rankSnapshot = (data: unknown) => {
+      const map = new Map(
+        ((data as Totals[] | null) ?? []).map((o) => [
+          o.user_id,
+          { total: o.total, weeks_won: o.weeks_won },
+        ])
       );
-    });
+      const ordered = ids
+        .map((id) => ({ id, ...(map.get(id) ?? { total: 0, weeks_won: 0 }) }))
+        .sort((a, b) => b.total - a.total || b.weeks_won - a.weeks_won);
+      const ranks = new Map<string, number>();
+      ordered.forEach((r, i) => {
+        const prev = ordered[i - 1];
+        ranks.set(
+          r.id,
+          i > 0 && prev.total === r.total && prev.weeks_won === r.weeks_won
+            ? ranks.get(prev.id)!
+            : i + 1
+        );
+      });
+      return ranks;
+    };
+
+    const priorRank = rankSnapshot(priorRes.data);
+    const settledRank = rankSnapshot(settledRes.data);
     for (const r of rows) {
       const was = priorRank.get(r.userId);
-      r.movement = was ? was - r.overallRank : 0; // + = moved up
+      const nowRank = settledRank.get(r.userId);
+      r.movement = was && nowRank ? was - nowRank : 0; // + = moved up
     }
   }
 
