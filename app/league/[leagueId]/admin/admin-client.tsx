@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { invokeSync, invokeReminderTest } from "@/lib/sync";
 import { downloadCsv, slugify } from "@/lib/csv";
 import { KickoffTime } from "@/components/kickoff-time";
+import { LocalTime } from "@/components/local-time";
 import { WeekPicker } from "@/components/week-picker";
 import type { Game, League, MemberRow } from "@/lib/types";
 import {
@@ -720,12 +721,7 @@ export function AdminClient({
                 {overrideRows.map((r, i) => (
                   <tr key={i} className="border-b border-line/50">
                     <td className="px-2 py-1 text-muted">
-                      {new Date(r.created_at).toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+                      <LocalTime iso={r.created_at} />
                     </td>
                     <td className="px-2 py-1">
                       W{r.week} {r.game_label}
@@ -783,12 +779,7 @@ export function AdminClient({
                 {auditRows.map((r, i) => (
                   <tr key={i} className="border-b border-line/50">
                     <td className="px-2 py-1 text-muted">
-                      {new Date(r.changed_at).toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+                      <LocalTime iso={r.changed_at} />
                     </td>
                     <td className="px-2 py-1 font-semibold">{r.display_name}</td>
                     <td className="px-2 py-1">Pick {r.pick_order}</td>

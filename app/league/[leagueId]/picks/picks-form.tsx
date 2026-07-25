@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { KickoffTime } from "@/components/kickoff-time";
+import { LocalTime } from "@/components/local-time";
 import { PICKS_PER_WEEK } from "@/lib/config";
 import type { Game } from "@/lib/types";
 import { savePicks, type PickInput } from "./actions";
@@ -201,6 +202,11 @@ export function PicksForm({
           <span>
             <b>{savedCount} of {PICKS_PER_WEEK} picks saved.</b> Add {PICKS_PER_WEEK - savedCount}{" "}
             more and save to lock in your week.
+          </span>
+        )}
+        {!weekLocked && lockAnchor && (
+          <span className="text-muted">
+            Everything locks <LocalTime iso={lockAnchor} withWeekday /> in your timezone.
           </span>
         )}
       </div>
