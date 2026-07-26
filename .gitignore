@@ -1,5 +1,14 @@
 node_modules
 .next
-.env*.local
-
 .vercel
+
+# Environment files. The previous pattern was `.env*.local`, which did NOT
+# cover a plain `.env` or `.env.production` — so a future file holding a
+# service-role key would have been committed.
+.env
+.env.*
+!.env.example
+
+# Base64 asset sidecars and the self-deleting decode script
+public/*.png.b64
+decode-assets.ps1

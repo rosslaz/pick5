@@ -1,0 +1,78 @@
+LEAGUE RULES
+Last updated: [DATE]
+
+
+1. THE BASICS
+Every week you pick five NFL games, straight up - no spreads, no point totals.
+You score the points your teams score.
+
+
+2. SCORING
+- A correct pick scores the number of points that team scored.
+- A wrong pick scores 0.
+- A tie scores 0 and counts as a loss on your record. You didn't pick a winner.
+
+Example: you pick Detroit, they win 38-10. You score 38 points.
+
+3. PICK ORDER MATTERS
+Rank your five picks 1 through 5. Order is the weekly tiebreaker (rule 6) and it
+decides the jackpot (rule 9). Put your highest-scoring expectation at Pick 1.
+
+4. DEADLINES
+- Games that kick off before Sunday 1:00 PM ET - Thursday, Friday, Saturday,
+  Sunday morning - lock at their own kickoff.
+- Everything else - the Sunday 1:00 slate, the 4:25 window, Sunday night and
+  Monday night - locks at Sunday 1:00 PM ET.
+
+Once the 1:00 games start, your slate is frozen for the week. You cannot add,
+change or reorder anything after that, including the Monday night game.
+
+5. INCOMPLETE SLATES
+You can submit fewer than five picks. Whatever you have at the lock is what
+counts; empty slots score 0. There is no penalty beyond the points you give up.
+
+6. WEEKLY WINNER
+Highest total points for the week. Ties break by Pick 1 points, then Pick 2, and
+so on down to Pick 5.
+
+7. SEASON STANDINGS
+Your overall total is the sum of your weekly totals. Season ties break by number
+of weeks won.
+
+8. VISIBILITY
+Nobody can see anyone else's picks until the Sunday 1:00 lock. Before then the
+leaderboard shows a lock icon for picks that are in but hidden, so you can see
+who has submitted without seeing what they took. Once the lock passes,
+everyone's full slate is visible - including Sunday night and Monday night.
+
+9. BUY-IN AND PAYOUTS
+Buy-in $180 ($10 per week). Full amount due prior to the start of the season
+
+Weekly Payouts:
+1st Place - 50% of the weekly pot
+2nd Place - 25% of the weekly pot
+3rd Place - 15% of the weekly pot
+10% of the weekly pot goes to year end payouts 
+
+End of Season Payouts: 
+1st overall in points - 50% of the year end pot
+2nd overall in points - 30% of the year end pot
+3rd overall in points - 20% of the year end pot
+
+10. SCHEDULE CHANGES (FLEX)
+If the NFL moves a game, your pick moves with it automatically - you don't need
+to do anything. The deadline still follows rule 4, so a game flexed into Sunday
+night still locks at 1:00 PM, and a game flexed to Thursday locks at its new
+kickoff. Check your picks when a flex is announced.
+
+11. SCORES AND CORRECTIONS
+Scores come from ESPN automatically. If ESPN is wrong or late, the commissioner
+can correct a score by hand. Every correction is recorded with who made it, what
+it was before, and when - and that history is visible to the commissioner.
+
+12. DISPUTES
+The commissioner has the final say.
+
+Every pick change is logged with a timestamp. After a week is completely
+finished, the commissioner can see every change made that week, so a question
+like "I definitely picked the other team" can actually be checked.

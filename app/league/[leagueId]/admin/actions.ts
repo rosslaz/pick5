@@ -25,12 +25,19 @@ export async function setMemberRole(
   role: "admin" | "player"
 ): Promise<{ error?: string }> {
   const supabase = await client();
-  const { error } = await supabase
+  // RLS (members_update) restricts this to league admins. Select the affected
+  // row back: without it a blocked update returns no error and zero rows, so
+  // the UI cheerfully reported success for something that never happened.
+  const { data, error } = await supabase
     .from("league_members")
     .update({ role })
     .eq("league_id", leagueId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("user_id");
   if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: "That change was not applied — you may not be an admin of this league." };
+  }
   revalidatePath(`/league/${leagueId}/admin`);
   return {};
 }
@@ -41,12 +48,16 @@ export async function setMemberStatus(
   status: "active" | "removed"
 ): Promise<{ error?: string }> {
   const supabase = await client();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("league_members")
     .update({ status })
     .eq("league_id", leagueId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("user_id");
   if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: "That change was not applied — you may not be an admin of this league." };
+  }
   revalidatePath(`/league/${leagueId}/admin`);
   revalidatePath(`/league/${leagueId}/leaderboard`);
   return {};
@@ -84,11 +95,15 @@ export async function renameLeague(
   if (trimmed.length > 60) return { error: "League name must be 60 characters or fewer." };
   const supabase = await client();
   // RLS (leagues_update policy, migration 0002) restricts this to league admins.
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("leagues")
     .update({ name: trimmed })
-    .eq("id", leagueId);
+    .eq("id", leagueId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: "That change was not applied — you may not be an admin of this league." };
+  }
   // The name appears in the nav on every page, so refresh the whole layout.
   revalidatePath(`/league/${leagueId}`, "layout");
   return {};
