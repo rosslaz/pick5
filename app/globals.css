@@ -50,7 +50,36 @@
     text-shadow: 0 0 8px rgba(201, 21, 30, 0.55);
   }
   .score-cell.dim { color: #5d6c85; text-shadow: none; border-color: rgba(126, 167, 216, 0.18); }
-  .score-cell.live { color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.5); border-color: rgba(74, 222, 128, 0.3); }
+
+  /* Pick outcome colours on the P1-P5 slot cells: green = winning pick,
+   * red = losing pick (a tie counts as a loss), grey = not played yet.
+   * `live` was green before, which now reads as "won" — it is neutral and
+   * pulsing instead. The Week/Overall totals keep the plain scoreboard look. */
+  .score-cell.win {
+    color: #4ade80;
+    text-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+    border-color: rgba(74, 222, 128, 0.45);
+    background: #05170f;
+  }
+  .score-cell.loss {
+    color: #f87171;
+    text-shadow: 0 0 8px rgba(248, 113, 113, 0.35);
+    border-color: rgba(248, 113, 113, 0.45);
+    background: #1a0a0c;
+  }
+  .score-cell.live {
+    color: #eaf1fa;
+    text-shadow: none;
+    border-color: rgba(234, 241, 250, 0.35);
+  }
+
+  /* Slot cells stack the team abbreviation over its points, so the team you
+   * picked stays readable after the game is scored. */
+  .score-cell.slot {
+    @apply min-w-[3.2rem] flex-col gap-0 px-2 py-1 leading-none;
+  }
+  .slot-abbr { @apply font-display text-sm font-bold tracking-wide; }
+  .slot-pts { @apply font-body text-xs font-semibold opacity-90; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

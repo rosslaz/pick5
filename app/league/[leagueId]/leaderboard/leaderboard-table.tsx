@@ -287,7 +287,7 @@ function SlotCell({ slot }: { slot: Slot }) {
     return (
       <span
         className="score-cell dim"
-        title="Pick submitted — hidden until the Sunday 1:00 ET slate kicks off"
+        title="Pick submitted — hidden until the Sunday 1:00 ET lock"
       >
         🔒
       </span>
@@ -295,30 +295,52 @@ function SlotCell({ slot }: { slot: Slot }) {
 
   const { result, pick, game } = slot;
   const abbr = pick.picked_home ? game.home_abbr : game.away_abbr;
+  const opponent = pick.picked_home ? game.away_abbr : game.home_abbr;
 
+  // The team you picked stays visible in every state — previously a scored
+  // game replaced it with just the points, so you lost track of who you took.
   if (result.state === "win")
     return (
-      <span className="score-cell" title={`${abbr} won`}>
-        {result.points}
+      <span
+        className="score-cell slot win"
+        title={`${abbr} beat ${opponent} — ${result.points} points`}
+      >
+        <span className="slot-abbr">{abbr}</span>
+        <span className="slot-pts">{result.points}</span>
       </span>
     );
+
   if (result.state === "loss") {
     const tied = game.home_score != null && game.home_score === game.away_score;
     return (
-      <span className="score-cell dim" title={tied ? "Tie — counts as a loss" : `${abbr} lost`}>
-        0
+      <span
+        className="score-cell slot loss"
+        title={
+          tied
+            ? `${abbr} tied ${opponent} — a tie counts as a loss`
+            : `${abbr} lost to ${opponent}`
+        }
+      >
+        <span className="slot-abbr">{abbr}</span>
+        <span className="slot-pts">0</span>
       </span>
     );
   }
+
   if (result.state === "live")
     return (
-      <span className="score-cell live pulse-live" title={`${abbr} — in progress`}>
-        {abbr}
+      <span
+        className="score-cell slot live pulse-live"
+        title={`${abbr} vs ${opponent} — in progress`}
+      >
+        <span className="slot-abbr">{abbr}</span>
+        <span className="slot-pts">live</span>
       </span>
     );
+
   return (
-    <span className="score-cell dim" title={`${abbr} — not started`}>
-      {abbr}
+    <span className="score-cell slot dim" title={`${abbr} vs ${opponent} — not started`}>
+      <span className="slot-abbr">{abbr}</span>
     </span>
   );
 }

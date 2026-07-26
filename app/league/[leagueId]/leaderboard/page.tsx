@@ -266,10 +266,11 @@ export default async function LeaderboardPage({
       <p className="mt-2 text-xs text-muted">
         You&apos;re always pinned to the top row with your true rank · # = weekly rank
         (overall rank when sorted by Overall) · W-L next to each name = season pick record;
-        a tied game counts as a loss · 🔒 pick submitted, hidden until the Sunday 1:00 ET
-        lock — after that every pick is visible, including Sunday night and Monday night ·
-        -- no pick submitted · Week ties break by Pick 1 points, then Pick 2, and so on ·
-        Overall ties break by weeks won.
+        a tied game counts as a loss · <b className="text-win">green</b> = winning pick with the
+        points it scored · <b className="text-loss">red</b> = losing pick · grey = not played yet ·
+        🔒 pick submitted, hidden until the Sunday 1:00 ET lock — after that every pick is
+        visible, including Sunday night and Monday night · -- no pick submitted · Week ties
+        break by Pick 1 points, then Pick 2, and so on · Overall ties break by weeks won.
       </p>
     </main>
   );
