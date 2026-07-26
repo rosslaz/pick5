@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { compareKeys, type Slot, type WeeklyRow } from "@/lib/scoring";
+import type { Game } from "@/lib/types";
 import { downloadCsv, slugify } from "@/lib/csv";
 
 export type BoardRow = WeeklyRow & {
@@ -190,11 +191,11 @@ export function LeaderboardTable({
                 </td>
               ))}
               <td className="px-3 py-2 text-right">
-                <span className="score-cell">{row.total}</span>
+                <span className="score-cell total">{row.total}</span>
               </td>
               <td className="px-3 py-2 text-right">
                 <span
-                  className="score-cell"
+                  className="score-cell total"
                   title={`${row.weeksWon} week${row.weeksWon === 1 ? "" : "s"} won`}
                 >
                   {row.overallTotal}
@@ -276,6 +277,17 @@ function SortHeader({
   );
 }
 
+/**
+ * The actual game score for a tooltip, e.g. "NE 21 - SEA 21". Falls back to
+ * the matchup when the game has no score yet.
+ */
+function scoreLine(game: Game): string {
+  if (game.away_score == null || game.home_score == null) {
+    return `${game.away_abbr} @ ${game.home_abbr}`;
+  }
+  return `${game.away_abbr} ${game.away_score} - ${game.home_abbr} ${game.home_score}`;
+}
+
 function SlotCell({ slot }: { slot: Slot }) {
   if (slot.kind === "empty")
     return (
@@ -295,7 +307,7 @@ function SlotCell({ slot }: { slot: Slot }) {
 
   const { result, pick, game } = slot;
   const abbr = pick.picked_home ? game.home_abbr : game.away_abbr;
-  const opponent = pick.picked_home ? game.away_abbr : game.home_abbr;
+  const score = scoreLine(game);
 
   // The team you picked stays visible in every state — previously a scored
   // game replaced it with just the points, so you lost track of who you took.
@@ -303,7 +315,7 @@ function SlotCell({ slot }: { slot: Slot }) {
     return (
       <span
         className="score-cell slot win"
-        title={`${abbr} beat ${opponent} — ${result.points} points`}
+        title={`${score} · ${abbr} won — ${result.points} points`}
       >
         <span className="slot-abbr">{abbr}</span>
         <span className="slot-pts">{result.points}</span>
@@ -315,11 +327,7 @@ function SlotCell({ slot }: { slot: Slot }) {
     return (
       <span
         className="score-cell slot loss"
-        title={
-          tied
-            ? `${abbr} tied ${opponent} — a tie counts as a loss`
-            : `${abbr} lost to ${opponent}`
-        }
+        title={`${score} · ${tied ? "tie — counts as a loss" : `${abbr} lost`}`}
       >
         <span className="slot-abbr">{abbr}</span>
         <span className="slot-pts">0</span>
@@ -329,17 +337,14 @@ function SlotCell({ slot }: { slot: Slot }) {
 
   if (result.state === "live")
     return (
-      <span
-        className="score-cell slot live pulse-live"
-        title={`${abbr} vs ${opponent} — in progress`}
-      >
+      <span className="score-cell slot live pulse-live" title={`${score} · in progress`}>
         <span className="slot-abbr">{abbr}</span>
         <span className="slot-pts">live</span>
       </span>
     );
 
   return (
-    <span className="score-cell slot dim" title={`${abbr} vs ${opponent} — not started`}>
+    <span className="score-cell slot dim" title={`${score} · not started`}>
       <span className="slot-abbr">{abbr}</span>
     </span>
   );

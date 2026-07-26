@@ -51,6 +51,14 @@
   }
   .score-cell.dim { color: #5d6c85; text-shadow: none; border-color: rgba(126, 167, 216, 0.18); }
 
+  /* Week / Overall totals: neutral white so red carries exactly one meaning on
+   * this table (a losing pick) instead of doubling as "just a number". */
+  .score-cell.total {
+    color: #eaf1fa;
+    text-shadow: none;
+    border-color: rgba(126, 167, 216, 0.28);
+  }
+
   /* Pick outcome colours on the P1-P5 slot cells: green = winning pick,
    * red = losing pick (a tie counts as a loss), grey = not played yet.
    * `live` was green before, which now reads as "won" — it is neutral and
