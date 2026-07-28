@@ -166,7 +166,7 @@ export function PicksForm({
   }
 
   return (
-    <div>
+    <div className="pb-24 lg:pb-0">
       {/* Fix #13: this block was hidden entirely when nothing was saved yet,
           so the player who most needs the nudge — the one with zero picks in —
           saw no status at all. */}
@@ -343,6 +343,39 @@ export function PicksForm({
           )}
         </div>
       </aside>
+    </div>
+
+    {/* Mobile action bar. The "Your picks" aside sits AFTER the games list in
+     * DOM order, so on a phone the counter and Save button were stranded below
+     * sixteen game cards — you could not see your progress while picking, or
+     * save without hunting for it. This pins both to the bottom of the screen
+     * on small viewports; the aside still handles it from `lg` up. */}
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="mx-auto flex max-w-3xl items-center gap-3">
+        <span
+          className={`score-cell ${used === PICKS_PER_WEEK ? "win" : "total"}`}
+          aria-label={`${used} of ${PICKS_PER_WEEK} picks selected`}
+        >
+          {used}/{PICKS_PER_WEEK}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted">
+          {weekLocked
+            ? `Week ${week} is locked`
+            : dirty
+            ? "Unsaved changes"
+            : savedCount === PICKS_PER_WEEK
+            ? "All picks saved"
+            : "Tap teams to pick"}
+        </span>
+        <button
+          className="btn-amber shrink-0"
+          onClick={save}
+          disabled={pending || !dirty || weekLocked}
+          type="button"
+        >
+          {pending ? "Saving…" : weekLocked ? "Locked" : "Save picks"}
+        </button>
+      </div>
     </div>
     </div>
   );

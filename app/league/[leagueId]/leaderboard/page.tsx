@@ -263,15 +263,30 @@ export default async function LeaderboardPage({
         week={week}
         leagueName={league.name}
       />
-      <p className="mt-2 text-xs text-muted">
-        You&apos;re always pinned to the top row with your true rank · # = weekly rank
-        (overall rank when sorted by Overall) · W-L next to each name = season pick record;
-        a tied game counts as a loss · <b className="text-win">green</b> = winning pick with the
-        points it scored · <b className="text-loss">red</b> = losing pick · grey = not played yet ·
-        🔒 pick submitted, hidden until the Sunday 1:00 ET lock — after that every pick is
-        visible, including Sunday night and Monday night · -- no pick submitted · Week ties
-        break by Pick 1 points, then Pick 2, and so on · Overall ties break by weeks won.
-      </p>
+      {/* A table that needs a paragraph to be understood isn't carrying its
+       * weight. The reference stays available but no longer competes with the
+       * standings for attention. */}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs uppercase tracking-wide text-muted hover:text-ink">
+          How scoring works
+        </summary>
+        <div className="mt-2 grid gap-1 text-xs text-muted sm:grid-cols-2">
+          <p>
+            <b className="text-win">Green</b> = winning pick, showing the points it scored.{" "}
+            <b className="text-loss">Red</b> = losing pick. Grey = not played yet.
+          </p>
+          <p>A tied game scores 0 and counts as a loss — you didn&apos;t pick a winner.</p>
+          <p>
+            🔒 means a pick is in but hidden until the Sunday 1:00 ET lock. After the lock every
+            pick is visible, including Sunday night and Monday night. -- means no pick was
+            submitted.
+          </p>
+          <p>
+            Week ties break by Pick 1 points, then Pick 2, and so on. Overall ties break by weeks
+            won. You&apos;re always pinned to the top row, keeping your true rank.
+          </p>
+        </div>
+      </details>
     </main>
   );
 }

@@ -112,7 +112,7 @@ export function LeaderboardTable({
           </button>
         </div>
       )}
-      <div className="card overflow-x-auto">
+      <div className="card hidden overflow-x-auto md:block">
       <table className="w-full border-collapse text-left">
         <thead>
           <tr className="border-b border-line text-xs uppercase text-muted">
@@ -213,8 +213,128 @@ export function LeaderboardTable({
         </tbody>
       </table>
       </div>
+
+      {/* Mobile board. The table has nine columns and used to scroll sideways,
+       * which pushed P4/P5 and both totals off-screen AND scrolled the player
+       * name away, so you lost track of whose row you were reading. Cards keep
+       * everything on one screen. The disclosure carries the game scores that
+       * live in `title` tooltips on desktop — those never appear on touch. */}
+      <MobileBoard rows={sorted} viewerId={viewerId} col={col} />
+
+      <div className="mt-3 flex items-center gap-2 md:hidden">
+        <span className="text-xs uppercase text-muted">Sort</span>
+        {(["week", "overall", "name"] as SortCol[]).map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => clickSort(c)}
+            className={`rounded-md border px-2 py-1 text-xs uppercase transition-colors ${
+              col === c ? "border-amber/60 text-ink" : "border-line text-muted"
+            }`}
+          >
+            {c === "week" ? "Week" : c === "overall" ? "Overall" : "Player"}
+          </button>
+        ))}
+      </div>
     </div>
   );
+}
+
+/** One card per player, replacing the sideways-scrolling table on phones. */
+function MobileBoard({
+  rows,
+  viewerId,
+  col,
+}: {
+  rows: BoardRow[];
+  viewerId: string;
+  col: SortCol;
+}) {
+  return (
+    <div className="flex flex-col gap-2 md:hidden">
+      {rows.map((row) => (
+        <div
+          key={row.userId}
+          className={`card p-3 ${
+            row.perfectSlate
+              ? "bg-gradient-to-r from-yellow-400/15 to-transparent"
+              : row.userId === viewerId
+              ? "bg-amber/5"
+              : ""
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-baseline gap-2">
+              <span className="font-display text-lg text-muted">
+                {col === "overall" ? row.overallRank : row.rank}
+              </span>
+              {col === "overall" && row.movement !== 0 && <MovementArrow delta={row.movement} />}
+              <span className="truncate font-semibold">{row.name}</span>
+              {row.userId === viewerId && <span className="text-xs text-amber">you</span>}
+              <span className="font-body text-xs font-normal text-muted">
+                {row.wins}-{row.losses}
+              </span>
+            </div>
+            <div className="flex shrink-0 gap-3 text-center">
+              <div>
+                <div className="text-[10px] uppercase leading-none text-muted">Week</div>
+                <span className="score-cell total mt-1">{row.total}</span>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase leading-none text-muted">Overall</div>
+                <span className="score-cell total mt-1">{row.overallTotal}</span>
+              </div>
+            </div>
+          </div>
+
+          {row.perfectSlate && (
+            <div className="mt-2 inline-block rounded-full bg-yellow-400/20 px-2 py-0.5 font-body text-xs font-bold text-yellow-300">
+              🏆 PERFECT SLATE
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-5 gap-1">
+            {row.slots.map((slot, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <span className="text-[10px] uppercase leading-none text-muted">P{i + 1}</span>
+                <SlotCell slot={slot} />
+              </div>
+            ))}
+          </div>
+
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-muted">Game scores</summary>
+            <ul className="mt-1 space-y-1 text-xs text-muted">
+              {row.slots.map((slot, i) => (
+                <li key={i}>
+                  <span className="text-muted/70">P{i + 1}</span> {slotDetail(slot)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      ))}
+      {rows.length === 0 && (
+        <p className="card p-4 text-center text-muted">No active players yet.</p>
+      )}
+    </div>
+  );
+}
+
+/** Full-sentence detail for the mobile disclosure (desktop uses tooltips). */
+function slotDetail(slot: Slot): string {
+  if (slot.kind === "empty") return "no pick submitted";
+  if (slot.kind === "hidden") return "pick hidden until the Sunday 1:00 ET lock";
+  const { game, pick, result } = slot;
+  const abbr = pick.picked_home ? game.home_abbr : game.away_abbr;
+  const score = scoreLine(game);
+  if (result.state === "win") return `${score} — ${abbr} won, ${result.points} pts`;
+  if (result.state === "loss") {
+    const tied = game.home_score != null && game.home_score === game.away_score;
+    return `${score} — ${tied ? "tie, counts as a loss" : `${abbr} lost`}`;
+  }
+  if (result.state === "live") return `${score} — in progress`;
+  return `${score} — not started`;
 }
 
 /** Rank movement since last completed week. delta>0 = moved up. */
