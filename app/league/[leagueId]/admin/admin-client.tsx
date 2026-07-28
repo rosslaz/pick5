@@ -7,6 +7,7 @@ import { invokeSync, invokeReminderTest } from "@/lib/sync";
 import { downloadCsv, slugify } from "@/lib/csv";
 import { KickoffTime } from "@/components/kickoff-time";
 import { LocalTime } from "@/components/local-time";
+import { ConfirmButton } from "@/components/confirm-button";
 import { WeekPicker } from "@/components/week-picker";
 import type { Game, League, MemberRow } from "@/lib/types";
 import {
@@ -416,20 +417,28 @@ export function AdminClient({
           <button className="btn-ghost" onClick={copyCode} type="button">
             {copied ? "Copied!" : "Copy"}
           </button>
-          <button
+          <ConfirmButton
+            label="Regenerate"
             className="btn-ghost"
             disabled={pending}
-            type="button"
-            onClick={() =>
+            danger
+            title="Regenerate the invite code?"
+            message={
+              <>
+                The current code <b className="text-ink">{code}</b> stops working immediately.
+                Anyone you&apos;ve already shared it with who hasn&apos;t joined yet will need the
+                new one. Players already in the league are unaffected.
+              </>
+            }
+            confirmLabel="Regenerate code"
+            onConfirm={() =>
               startTransition(async () => {
                 const res = await regenerateInviteCode(league.id);
                 if (res.error) setErr(res.error);
                 else if (res.code) setCode(res.code);
               })
             }
-          >
-            Regenerate
-          </button>
+          />
         </div>
       </section>
 
@@ -463,9 +472,15 @@ export function AdminClient({
             onChange={(e) => setResetWeek(e.target.value)}
             className="input w-20"
           />
-          <button className="btn-amber" type="button" disabled={pending} onClick={applyReset}>
-            Apply
-          </button>
+          <ConfirmButton
+            label="Apply"
+            className="btn-amber"
+            disabled={pending}
+            title={`Count standings from week ${resetWeek}?`}
+            message="Every player's Overall total changes to count only from that week onward. Nothing is deleted — weekly results are untouched and you can undo this at any time."
+            confirmLabel="Apply window"
+            onConfirm={applyReset}
+          />
           {scoreFromWeek && (
             <button className="btn-ghost" type="button" disabled={pending} onClick={undoReset}>
               Undo (full season)
@@ -621,26 +636,31 @@ export function AdminClient({
                             Make admin
                           </button>
                         ) : (
-                          <button
+                          <ConfirmButton
+                            label="Demote"
                             className="btn-ghost px-2 py-1 text-xs"
                             disabled={pending || lastAdmin}
-                            title={lastAdmin ? "A league needs at least one admin" : undefined}
-                            type="button"
-                            onClick={() => run(() => setMemberRole(league.id, m.user_id, "player"))}
-                          >
-                            Demote
-                          </button>
+                            buttonTitle={lastAdmin ? "A league needs at least one admin" : undefined}
+                            title={`Demote ${m.profiles?.display_name ?? "this player"}?`}
+                            message="They lose access to this Admin screen and can no longer change scores or settings. You can promote them again at any time."
+                            confirmLabel="Demote to player"
+                            onConfirm={() => run(() => setMemberRole(league.id, m.user_id, "player"))}
+                          />
                         )}
                         {m.status === "active" ? (
-                          <button
+                          <ConfirmButton
+                            label="Remove"
                             className="btn-danger px-2 py-1 text-xs"
                             disabled={pending || isSelf || lastAdmin}
-                            title={isSelf ? "You can't remove yourself" : undefined}
-                            type="button"
-                            onClick={() => run(() => setMemberStatus(league.id, m.user_id, "removed"))}
-                          >
-                            Remove
-                          </button>
+                            danger
+                            buttonTitle={isSelf ? "You can't remove yourself" : undefined}
+                            title={`Remove ${m.profiles?.display_name ?? "this player"}?`}
+                            message="They lose access to the league and disappear from the standings. Their picks are kept, and you can reinstate them later."
+                            confirmLabel="Remove player"
+                            onConfirm={() =>
+                              run(() => setMemberStatus(league.id, m.user_id, "removed"))
+                            }
+                          />
                         ) : (
                           <button
                             className="btn-ghost px-2 py-1 text-xs"

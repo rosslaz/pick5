@@ -90,9 +90,19 @@
   }
   .slot-abbr { @apply font-display text-sm font-bold tracking-wide; }
   .slot-pts { @apply font-body text-xs font-semibold opacity-90; }
+
+  /* Native <dialog>, centred by showModal(). */
+  .confirm-dialog {
+    @apply w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-5 text-ink;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .pulse-live { animation: pulse-live 1.6s ease-in-out infinite; }
   @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+}
+
+.confirm-dialog::backdrop {
+  background: rgba(2, 14, 32, 0.72);
+  backdrop-filter: blur(2px);
 }
