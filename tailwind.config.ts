@@ -15,6 +15,12 @@ const config: Config = {
         line: "rgba(126,167,216,0.18)",
         amber: "#C9151E",
         navy: "#013166",
+        // "chosen" carries every you-selected-this / you-are-here state: the
+        // picked team, the active week, the current nav tab, focus rings.
+        // Those used to share the brand red, which meant a team you picked
+        // looked exactly like a team that lost. Lightened from the shield navy
+        // so it stays on-brand.
+        chosen: "#4FA3F0",
         win: "#4ADE80",
         loss: "#F87171",
         ink: "#EAF1FA",

@@ -31,23 +31,25 @@
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-display uppercase tracking-wider text-base font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-amber { @apply btn bg-amber text-white hover:bg-[#e01b25]; }
-  .btn-ghost { @apply btn border border-line text-ink hover:border-amber/60; }
+  .btn-ghost { @apply btn border border-line text-ink hover:border-chosen/60; }
   .btn-danger { @apply btn border border-loss/40 text-loss hover:bg-loss/10; }
 
   .input {
-    @apply w-full rounded-lg bg-pitch border border-line px-3 py-2 text-ink placeholder:text-muted/60 focus:outline-none focus:border-amber/70;
+    @apply w-full rounded-lg bg-pitch border border-line px-3 py-2 text-ink placeholder:text-muted/60 focus:outline-none focus:border-chosen/70;
   }
 
-  /* stadium scoreboard cells — red LED digits on a dark board */
+  /* Scoreboard cell. The base is neutral: red is reserved for a losing pick,
+   * so a plain number (a live score, your 3/5 counter, the invite code) must
+   * not render in it. Outcome comes from the modifiers below. */
   .score-cell {
     font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
     font-variant-numeric: tabular-nums;
     @apply inline-flex min-w-[2.6rem] items-center justify-center rounded-md px-1.5 py-0.5 text-lg font-bold;
     background: #04101f;
-    border: 1px solid rgba(201, 21, 30, 0.35);
+    border: 1px solid rgba(126, 167, 216, 0.28);
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.65);
-    color: #ff4a4a;
-    text-shadow: 0 0 8px rgba(201, 21, 30, 0.55);
+    color: #eaf1fa;
+    text-shadow: none;
   }
   .score-cell.dim { color: #5d6c85; text-shadow: none; border-color: rgba(126, 167, 216, 0.18); }
 

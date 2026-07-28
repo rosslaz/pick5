@@ -152,7 +152,7 @@ export function LeaderboardTable({
                 row.perfectSlate
                   ? "bg-gradient-to-r from-yellow-400/15 to-transparent"
                   : row.userId === viewerId
-                  ? "bg-amber/5"
+                  ? "bg-chosen/5"
                   : ""
               }`}
             >
@@ -183,7 +183,7 @@ export function LeaderboardTable({
                 >
                   {row.wins}-{row.losses}
                 </span>
-                {row.userId === viewerId && <span className="ml-1 text-xs text-amber">you</span>}
+                {row.userId === viewerId && <span className="ml-1 text-xs text-chosen">you</span>}
               </td>
               {row.slots.map((slot, i) => (
                 <td key={i} className="px-2 py-2 text-center">
@@ -229,7 +229,7 @@ export function LeaderboardTable({
             type="button"
             onClick={() => clickSort(c)}
             className={`rounded-md border px-2 py-1 text-xs uppercase transition-colors ${
-              col === c ? "border-amber/60 text-ink" : "border-line text-muted"
+              col === c ? "border-chosen/60 text-ink" : "border-line text-muted"
             }`}
           >
             {c === "week" ? "Week" : c === "overall" ? "Overall" : "Player"}
@@ -259,7 +259,7 @@ function MobileBoard({
             row.perfectSlate
               ? "bg-gradient-to-r from-yellow-400/15 to-transparent"
               : row.userId === viewerId
-              ? "bg-amber/5"
+              ? "bg-chosen/5"
               : ""
           }`}
         >
@@ -270,7 +270,7 @@ function MobileBoard({
               </span>
               {col === "overall" && row.movement !== 0 && <MovementArrow delta={row.movement} />}
               <span className="truncate font-semibold">{row.name}</span>
-              {row.userId === viewerId && <span className="text-xs text-amber">you</span>}
+              {row.userId === viewerId && <span className="text-xs text-chosen">you</span>}
               <span className="font-body text-xs font-normal text-muted">
                 {row.wins}-{row.losses}
               </span>
@@ -385,7 +385,7 @@ function SortHeader({
         type="button"
         onClick={onClick}
         className={`inline-flex items-center gap-1 uppercase transition-colors hover:text-ink ${
-          active ? "text-amber" : ""
+          active ? "text-chosen" : ""
         }`}
       >
         {label}

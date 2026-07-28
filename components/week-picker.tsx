@@ -18,9 +18,9 @@ export function WeekPicker({
           href={`${basePath}?week=${w}`}
           className={`shrink-0 rounded-md border px-3 py-1 font-display text-base font-semibold ${
             w === selected
-              ? "border-amber bg-amber text-white"
+              ? "border-chosen bg-chosen text-pitch"
               : w === current
-                ? "border-amber/50 text-amber"
+                ? "border-chosen/50 text-chosen"
                 : "border-line text-muted hover:text-ink"
           }`}
         >

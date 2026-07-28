@@ -176,7 +176,7 @@ export function PicksForm({
             ? "border-line bg-raised/40 text-muted"
             : savedCount === PICKS_PER_WEEK && !dirty
             ? "border-win/40 bg-win/10 text-win"
-            : "border-amber/40 bg-amber/10 text-ink"
+            : "border-chosen/40 bg-chosen/10 text-ink"
         }`}
       >
         {weekLocked ? (
@@ -265,7 +265,9 @@ export function PicksForm({
         <div className="card p-4">
           <div className="flex items-baseline justify-between">
             <h2 className="text-2xl">Your picks</h2>
-            <span className="score-cell">{used}/5</span>
+            <span className={`score-cell ${used === PICKS_PER_WEEK ? "win" : ""}`}>
+              {used}/5
+            </span>
           </div>
           <p className="mt-1 text-xs text-muted">
             Order matters — Pick 1 is your first tiebreaker.
@@ -408,8 +410,8 @@ function TeamButton({
       aria-pressed={selected}
       className={`relative block w-full min-w-0 rounded-lg border px-2 py-2 text-left transition-colors disabled:cursor-not-allowed ${
         selected
-          ? "border-amber bg-amber/10"
-          : "border-line hover:border-amber/40"
+          ? "border-chosen bg-chosen/15"
+          : "border-line hover:border-chosen/40"
       }`}
     >
       {/* Flex lives on an inner span: Safari mis-sizes flex children of <button>. */}
@@ -425,7 +427,7 @@ function TeamButton({
         {score !== null && <span className="score-cell">{score}</span>}
       </span>
       {slotNumber && (
-        <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-amber font-display text-sm font-bold text-white">
+        <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-chosen font-display text-sm font-bold text-pitch">
           {slotNumber}
         </span>
       )}

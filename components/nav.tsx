@@ -77,7 +77,7 @@ export function Nav({
               href={tab.href}
               className={`rounded-t-lg px-4 py-2 font-display text-lg uppercase tracking-wider ${
                 active
-                  ? "border-b-2 border-amber text-amber"
+                  ? "border-b-2 border-chosen text-ink"
                   : "text-muted hover:text-ink"
               }`}
             >
