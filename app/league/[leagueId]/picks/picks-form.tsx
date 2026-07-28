@@ -261,7 +261,7 @@ export function PicksForm({
         })}
       </div>
 
-      <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+      <aside id="your-picks" className="min-w-0 scroll-mt-24 lg:sticky lg:top-24 lg:self-start">
         <div className="card p-4">
           <div className="flex items-baseline justify-between">
             <h2 className="text-2xl">Your picks</h2>
@@ -269,19 +269,28 @@ export function PicksForm({
               {used}/5
             </span>
           </div>
+          {/* Pick order decides two things people only discover after losing a
+            * tiebreak, so both are stated up front rather than in one line. */}
           <p className="mt-1 text-xs text-muted">
-            Order matters — Pick 1 is your first tiebreaker.
+            Order matters. <b className="text-ink">Pick 1</b> breaks weekly ties, and the
+            perfect-slate jackpot needs all five in exact points order.
           </p>
-          <ol className="mt-3 flex flex-col gap-2">
+          <div className="mt-3 flex items-center justify-between text-[10px] uppercase tracking-wide text-muted">
+            <span>1 = most points expected</span>
+            <span>5 = fewest</span>
+          </div>
+          <ol className="mt-1 flex flex-col gap-2">
             {slots.map((s, i) => {
               const game = s ? gameById.get(s.gameId) : undefined;
               const locked = slotLocked(i);
               return (
                 <li
                   key={i}
-                  className="flex items-center gap-2 rounded-lg border border-line bg-pitch px-2 py-1.5"
+                  className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 ${
+                    i === 0 ? "border-chosen/40 bg-chosen/5" : "border-line bg-pitch"
+                  }`}
                 >
-                  <span className="score-cell dim">{i + 1}</span>
+                  <span className={`score-cell ${i === 0 ? "" : "dim"}`}>{i + 1}</span>
                   {s && game ? (
                     <>
                       <span className="min-w-0 flex-1 truncate font-display text-lg font-semibold">
@@ -324,12 +333,23 @@ export function PicksForm({
                       )}
                     </>
                   ) : (
-                    <span className="flex-1 text-sm text-muted">Tap a team to fill</span>
+                    <span className="flex-1 text-sm text-muted">
+                      {i === 0 ? "Tap your highest scorer" : "Tap a team to fill"}
+                    </span>
                   )}
                 </li>
               );
             })}
           </ol>
+          {/* A deliberate beat before saving: this is the only moment the order
+            * can still be changed, and its consequences are invisible until
+            * results land. */}
+          {used === PICKS_PER_WEEK && dirty && !weekLocked && (
+            <p className="mt-3 rounded-lg border border-chosen/40 bg-chosen/10 px-3 py-2 text-xs text-ink">
+              <b>Check your order before saving.</b> Pick 1 should be the team you expect to
+              score the most points. Use the arrows to reorder.
+            </p>
+          )}
           <button
             className="btn-amber mt-4 w-full"
             onClick={save}
@@ -354,15 +374,19 @@ export function PicksForm({
      * on small viewports; the aside still handles it from `lg` up. */}
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="mx-auto flex max-w-3xl items-center gap-3">
-        <span
-          className={`score-cell ${used === PICKS_PER_WEEK ? "win" : "total"}`}
-          aria-label={`${used} of ${PICKS_PER_WEEK} picks selected`}
+        <a
+          href="#your-picks"
+          className={`score-cell ${used === PICKS_PER_WEEK ? "win" : ""}`}
+          aria-label={`${used} of ${PICKS_PER_WEEK} picks selected — review your order`}
+          title="Review your pick order"
         >
           {used}/{PICKS_PER_WEEK}
-        </span>
+        </a>
         <span className="min-w-0 flex-1 truncate text-xs text-muted">
           {weekLocked
             ? `Week ${week} is locked`
+            : dirty && used === PICKS_PER_WEEK
+            ? "Check your order, then save"
             : dirty
             ? "Unsaved changes"
             : savedCount === PICKS_PER_WEEK
